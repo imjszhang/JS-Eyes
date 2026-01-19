@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Eyes</title>
+  
+  <!-- Tailwind CSS (Local File) -->
+  <link rel="stylesheet" href="libs/tailwind.css">
+  
+  <!-- Google Fonts (Local File) -->
+  <link rel="stylesheet" href="fonts/fonts.css">
+  
+  <!-- Custom Styles -->
+  <style>
+    /* Popup window fixed width */
+    body {
+      width: 400px;
+      max-height: 600px;
+    }
+  </style>
+  
+  <!-- Keep popup.css for custom style classes -->
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body class="bg-brand-yellow min-h-screen font-sans text-black relative overflow-x-hidden selection:bg-black selection:text-brand-yellow">
+  <div class="w-full">
+    <!-- Title Bar -->
+    <div class="bg-white border-3 border-black shadow-brutal px-4 py-2.5 flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <!-- Logo Icon -->
+        <img src="../icons/icon-16.png" alt="JS" class="w-4 h-4 flex-shrink-0">
+        <h1 class="text-sm font-bold text-black uppercase tracking-tight" data-i18n="appTitle">Eyes</h1>
+      </div>
+      <div class="text-[10px] font-bold bg-white text-black px-1.5 py-0.5 border-2 border-black shadow-brutal-sm leading-none" id="version-badge">v1.0.0</div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="px-5 py-4 border-b-3 border-black">
+      <div class="brutal-card p-3 mb-3">
+        <div class="flex justify-between items-center py-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="serverConnection">Server Connection</div>
+          <div>
+            <span id="connection-status" class="status-badge disconnected px-3 py-1 text-xs font-bold" data-i18n="statusDisconnected">Disconnected</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="serverAddress">Server Address</div>
+          <div class="text-sm text-black font-mono break-all text-right max-w-[200px] font-bold">
+            <span id="server-url">ws://localhost:8080</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="reconnectAttempts">Reconnect Attempts</div>
+          <div class="text-sm text-black font-mono font-bold">
+            <span id="reconnect-attempts">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Information -->
+    <div class="px-5 py-4 border-b-3 border-black">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-sm font-bold text-black uppercase" data-i18n="currentTab">Current Tab</h3>
+        <button id="refresh-tabs" class="brutal-btn px-3 py-1 text-xs font-bold uppercase" data-i18n="btnRefresh">Refresh</button>
+      </div>
+      
+      <div class="brutal-card p-3 bg-white">
+        <div class="flex justify-between items-start py-1.5 border-b-3 border-black last:border-b-0">
+          <div class="text-xs font-bold text-black uppercase min-w-[60px]" data-i18n="labelTitle">Title</div>
+          <div class="text-xs text-black text-right flex-1 max-w-[250px] truncate font-bold" id="current-tab-title">-</div>
+        </div>
+        
+        <div class="flex justify-between items-start py-1.5 border-b-3 border-black mt-2 pt-2 last:border-b-0">
+          <div class="text-xs font-bold text-black uppercase min-w-[60px]" data-i18n="labelUrl">URL</div>
+          <div class="text-xs text-black text-right flex-1 max-w-[250px] truncate font-mono font-bold" id="current-tab-url">-</div>
+        </div>
+        
+        <div class="flex justify-between items-start py-1.5 border-t-3 border-black mt-2 pt-2">
+          <div class="text-xs font-bold text-black uppercase min-w-[60px]" data-i18n="labelId">ID</div>
+          <div class="text-xs text-black text-right flex-1 max-w-[250px] truncate font-mono font-bold" id="current-tab-id">-</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="px-5 py-4 border-b-3 border-black">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-sm font-bold text-black uppercase" data-i18n="browserStats">Browser Statistics</h3>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-3">
+        <div class="brutal-card p-3 text-center bg-white">
+          <div class="text-lg font-black text-black mb-1 font-mono" id="total-tabs">0</div>
+          <div class="text-xs text-black uppercase tracking-wide font-bold" data-i18n="totalTabs">Total Tabs</div>
+        </div>
+        
+        <div class="brutal-card p-3 text-center bg-white">
+          <div class="text-lg font-black text-black mb-1 font-mono" id="total-windows">0</div>
+          <div class="text-xs text-black uppercase tracking-wide font-bold" data-i18n="totalWindows">Total Windows</div>
+        </div>
+        
+        <div class="brutal-card p-3 text-center bg-white">
+          <div class="text-lg font-black text-black mb-1 font-mono" id="data-sent">0</div>
+          <div class="text-xs text-black uppercase tracking-wide font-bold" data-i18n="dataSent">Data Sent</div>
+        </div>
+        
+        <div class="brutal-card p-3 text-center bg-white">
+          <div class="text-lg font-black text-black mb-1 font-mono" id="last-sync">-</div>
+          <div class="text-xs text-black uppercase tracking-wide font-bold" data-i18n="lastSync">Last Sync</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="px-5 py-4 border-b-3 border-black text-center flex gap-3">
+      <button id="reconnect-btn" class="brutal-btn flex-1 px-6 py-3 text-sm font-bold uppercase" data-i18n="btnReconnect">Reconnect</button>
+      <button id="send-data-btn" class="brutal-btn-primary flex-1 px-6 py-3 text-sm font-bold uppercase" data-i18n="btnSendData">Send Data</button>
+    </div>
+
+    <!-- Log Area -->
+    <div class="px-5 py-4 border-b-3 border-black">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-sm font-bold text-black uppercase" data-i18n="activityLog">Activity Log</h3>
+        <button id="clear-logs" class="brutal-btn px-3 py-1 text-xs font-bold uppercase" data-i18n="btnClear">Clear</button>
+      </div>
+      
+      <div class="brutal-card bg-black max-h-[120px] overflow-y-auto p-2" id="logs-container">
+        <div class="flex gap-2 py-1 text-xs border-b-3 border-brand-yellow last:border-b-0">
+          <span class="text-brand-yellow font-mono min-w-[60px] font-bold">17:04:44</span>
+          <span class="text-brand-yellow flex-1 font-bold" data-i18n="logExtensionStarted">Extension Started</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Area -->
+    <div class="px-5 py-4 border-b-3 border-black">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-sm font-bold text-black uppercase" data-i18n="connectionSettings">Connection Settings</h3>
+      </div>
+      
+      <div class="mb-4 pb-4 border-b-3 border-black">
+        <div class="mb-3">
+          <label for="server-input" class="block text-xs text-black mb-1.5 font-bold uppercase" data-i18n="serverAddressLabel">Server Address:</label>
+          <div class="flex gap-2 items-center">
+            <input type="text" id="server-input" value="" placeholder="ws://localhost:8080" class="brutal-input flex-1 px-3 py-2 text-xs font-mono font-bold uppercase">
+            <button id="save-server" class="brutal-btn-primary px-4 py-2 text-xs font-bold uppercase whitespace-nowrap" data-i18n="btnConnect">Connect</button>
+          </div>
+        </div>
+        
+        <div class="mt-3">
+          <label class="block text-xs text-black mb-1.5 font-bold uppercase" data-i18n="presetAddresses">Preset Addresses:</label>
+          <div class="flex flex-wrap gap-1.5">
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://localhost:8080" data-i18n="presetLocal">Local:8080</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://js.local:8080" data-i18n="presetDockerLocal">Docker Local:8080</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="wss://js.local:8080" data-i18n="presetDockerLocalSSL">Docker Local:8080 (SSL)</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://ws.js.local" data-i18n="presetDockerWS">Docker WS Subdomain</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="wss://ws.js.local" data-i18n="presetDockerWSS">Docker WSS Subdomain</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-4">
+        <div class="flex items-center gap-2 mb-3">
+          <label class="text-xs text-black flex items-center cursor-pointer font-bold uppercase">
+            <input type="checkbox" id="auto-connect" checked class="mr-1.5 w-5 h-5 border-3 border-black accent-black">
+            <span data-i18n="autoConnect">Auto Connect</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-black flex items-center cursor-pointer font-bold uppercase">
+            <input type="checkbox" id="debug-mode" class="mr-1.5 w-5 h-5 border-3 border-black accent-black">
+            <span data-i18n="debugMode">Debug Mode</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help Information -->
+    <div class="px-5 py-4">
+      <details class="cursor-pointer">
+        <summary class="font-bold text-black py-2 outline-none text-sm uppercase" data-i18n="help">Help</summary>
+        <div class="brutal-card bg-white p-3 mt-3 text-black text-xs leading-relaxed">
+          <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpConnectionTitle">Connection Settings:</p>
+          <ul class="ml-5 mb-3 list-disc font-bold">
+            <li class="mb-1" data-i18n="helpConnection1">Manually enter server address, supports ws:// and wss:// protocols</li>
+            <li class="mb-1" data-i18n="helpConnection2">Click preset addresses to quickly select preset servers</li>
+            <li class="mb-1" data-i18n="helpConnection3">Click "Connect" button to save address and connect to server</li>
+            <li class="mb-1" data-i18n="helpConnection4">When "Auto Connect" is enabled, extension automatically connects on startup and reconnects after disconnection</li>
+            <li class="mb-1" data-i18n="helpConnection5">Automatically reconnects after disconnection (using exponential backoff strategy, unlimited retries)</li>
+            <li class="mb-1" data-i18n="helpConnection6">Supports debug mode to view detailed logs</li>
+          </ul>
+          
+          <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpFeaturesTitle">Features:</p>
+          <ul class="ml-5 mb-3 list-disc font-bold">
+            <li class="mb-1" data-i18n="helpFeature1">Real-time tab synchronization</li>
+            <li class="mb-1" data-i18n="helpFeature2">Remote script execution</li>
+            <li class="mb-1" data-i18n="helpFeature3">Page content retrieval</li>
+            <li class="mb-1" data-i18n="helpFeature4">Cookie management</li>
+            <li class="mb-1" data-i18n="helpFeature5">CSS injection</li>
+          </ul>
+          
+          <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpAddressTitle">Common Address Formats:</p>
+          <ul class="ml-5 mb-3 list-disc font-bold">
+            <li class="mb-1" data-i18n="helpAddress1">Local Development: ws://localhost:8080</li>
+            <li class="mb-1" data-i18n="helpAddress2">Docker Local: ws://js.local:8080 or wss://js.local:8080</li>
+            <li class="mb-1" data-i18n="helpAddress3">Docker WebSocket Subdomain: ws://ws.js.local or wss://ws.js.local</li>
+            <li class="mb-1" data-i18n="helpAddress4">LAN Server: ws://192.168.1.100:8080</li>
+            <li class="mb-1" data-i18n="helpAddress5">Production: wss://your-domain.com:8080</li>
+          </ul>
+          
+          <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpDockerTitle">Docker Deployment Notes:</p>
+          <ul class="ml-5 mb-3 list-disc font-bold">
+            <li class="mb-1" data-i18n="helpDocker1">Ensure adding to hosts file: 127.0.0.1 js.local ws.js.local</li>
+            <li class="mb-1" data-i18n="helpDocker2">Docker configuration supports both 8080 port direct connection and WebSocket subdomain</li>
+            <li class="mb-1" data-i18n="helpDocker3">Production environment recommends using SSL (wss://) connection</li>
+            <li class="mb-1" data-i18n="helpDocker4">Extension will automatically try multiple addresses until connection succeeds</li>
+          </ul>
+          
+          <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpLinksTitle">Links:</p>
+          <div class="flex gap-2">
+            <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn px-3 py-1.5 text-[11px] font-bold uppercase no-underline inline-flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              <span data-i18n="helpGithub">GitHub</span>
+            </a>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="i18n.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,442 @@
+{
+  "extName": {
+    "message": "JS Eyes",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Browser Extension for DeepSeek Cowork - Provides browser automation capabilities for DeepSeek Cowork",
+    "description": "Extension description"
+  },
+
+  "appTitle": {
+    "message": "Eyes",
+    "description": "App title in header"
+  },
+
+  "serverConnection": {
+    "message": "Server Connection",
+    "description": "Server connection section title"
+  },
+  "serverAddress": {
+    "message": "Server Address",
+    "description": "Server address label"
+  },
+  "reconnectAttempts": {
+    "message": "Reconnect Attempts",
+    "description": "Reconnect attempts label"
+  },
+
+  "currentTab": {
+    "message": "Current Tab",
+    "description": "Current tab section title"
+  },
+  "labelTitle": {
+    "message": "Title",
+    "description": "Tab title label"
+  },
+  "labelUrl": {
+    "message": "URL",
+    "description": "Tab URL label"
+  },
+  "labelId": {
+    "message": "ID",
+    "description": "Tab ID label"
+  },
+
+  "browserStats": {
+    "message": "Browser Statistics",
+    "description": "Browser statistics section title"
+  },
+  "totalTabs": {
+    "message": "Total Tabs",
+    "description": "Total tabs label"
+  },
+  "totalWindows": {
+    "message": "Total Windows",
+    "description": "Total windows label"
+  },
+  "dataSent": {
+    "message": "Data Sent",
+    "description": "Data sent label"
+  },
+  "lastSync": {
+    "message": "Last Sync",
+    "description": "Last sync label"
+  },
+
+  "activityLog": {
+    "message": "Activity Log",
+    "description": "Activity log section title"
+  },
+  "connectionSettings": {
+    "message": "Connection Settings",
+    "description": "Connection settings section title"
+  },
+  "serverAddressLabel": {
+    "message": "Server Address:",
+    "description": "Server address input label"
+  },
+  "presetAddresses": {
+    "message": "Preset Addresses:",
+    "description": "Preset addresses label"
+  },
+  "autoConnect": {
+    "message": "Auto Connect",
+    "description": "Auto connect checkbox label"
+  },
+  "debugMode": {
+    "message": "Debug Mode",
+    "description": "Debug mode checkbox label"
+  },
+  "help": {
+    "message": "Help",
+    "description": "Help section title"
+  },
+
+  "btnReconnect": {
+    "message": "Reconnect",
+    "description": "Reconnect button text"
+  },
+  "btnSendData": {
+    "message": "Send Data",
+    "description": "Send data button text"
+  },
+  "btnRefresh": {
+    "message": "Refresh",
+    "description": "Refresh button text"
+  },
+  "btnClear": {
+    "message": "Clear",
+    "description": "Clear button text"
+  },
+  "btnConnect": {
+    "message": "Connect",
+    "description": "Connect button text"
+  },
+
+  "statusConnected": {
+    "message": "Connected",
+    "description": "Connected status text"
+  },
+  "statusDisconnected": {
+    "message": "Disconnected",
+    "description": "Disconnected status text"
+  },
+  "statusConnecting": {
+    "message": "Connecting",
+    "description": "Connecting status text"
+  },
+
+  "presetLocal": {
+    "message": "Local:8080",
+    "description": "Local preset button"
+  },
+  "presetDockerLocal": {
+    "message": "Docker Local:8080",
+    "description": "Docker local preset button"
+  },
+  "presetDockerLocalSSL": {
+    "message": "Docker Local:8080 (SSL)",
+    "description": "Docker local SSL preset button"
+  },
+  "presetDockerWS": {
+    "message": "Docker WS Subdomain",
+    "description": "Docker WS subdomain preset button"
+  },
+  "presetDockerWSS": {
+    "message": "Docker WSS Subdomain",
+    "description": "Docker WSS subdomain preset button"
+  },
+
+  "logPopupInit": {
+    "message": "Popup initialized",
+    "description": "Log: popup initialized"
+  },
+  "logExtensionStarted": {
+    "message": "Extension Started",
+    "description": "Log: extension started"
+  },
+  "logSettingSaved": {
+    "message": "Setting saved: $KEY$ = $VALUE$",
+    "description": "Log: setting saved",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "debugMode"
+      },
+      "value": {
+        "content": "$2",
+        "example": "true"
+      }
+    }
+  },
+  "logFailedLoadSettings": {
+    "message": "Failed to load settings: $ERROR$",
+    "description": "Log: failed to load settings",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Network error"
+      }
+    }
+  },
+  "logFailedSaveSetting": {
+    "message": "Failed to save setting: $ERROR$",
+    "description": "Log: failed to save setting",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Storage error"
+      }
+    }
+  },
+  "logAutoConnectEnabled": {
+    "message": "Auto connect enabled",
+    "description": "Log: auto connect enabled"
+  },
+  "logAutoConnectDisabled": {
+    "message": "Auto connect disabled",
+    "description": "Log: auto connect disabled"
+  },
+  "logFailedUpdateAutoConnect": {
+    "message": "Failed to update auto connect setting",
+    "description": "Log: failed to update auto connect"
+  },
+  "logFailedToggleAutoConnect": {
+    "message": "Failed to toggle auto connect: $ERROR$",
+    "description": "Log: failed to toggle auto connect",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logPresetSelected": {
+    "message": "Preset address selected: $URL$",
+    "description": "Log: preset address selected",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "ws://localhost:8080"
+      }
+    }
+  },
+  "logServerEmpty": {
+    "message": "Server address cannot be empty",
+    "description": "Log: server address empty"
+  },
+  "logServerInvalidProtocol": {
+    "message": "Server address must start with ws:// or wss://",
+    "description": "Log: invalid server protocol"
+  },
+  "logServerSaved": {
+    "message": "Server address saved: $URL$",
+    "description": "Log: server address saved",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "ws://localhost:8080"
+      }
+    }
+  },
+  "logApplyingReconnect": {
+    "message": "Applying new address and reconnecting...",
+    "description": "Log: applying and reconnecting"
+  },
+  "logFailedSaveServer": {
+    "message": "Failed to save server address: $ERROR$",
+    "description": "Log: failed to save server",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logFailedUpdateStatus": {
+    "message": "Failed to update status: $ERROR$",
+    "description": "Log: failed to update status",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnecting": {
+    "message": "Reconnecting...",
+    "description": "Log: reconnecting"
+  },
+  "logReconnectSent": {
+    "message": "Reconnect request sent",
+    "description": "Log: reconnect request sent"
+  },
+  "logReconnectFailed": {
+    "message": "Reconnect request failed",
+    "description": "Log: reconnect request failed"
+  },
+  "logFailedReconnect": {
+    "message": "Failed to reconnect: $ERROR$",
+    "description": "Log: failed to reconnect",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logSendingData": {
+    "message": "Sending tab data...",
+    "description": "Log: sending tab data"
+  },
+  "logDataSentSuccess": {
+    "message": "Tab data sent successfully",
+    "description": "Log: data sent success"
+  },
+  "logDataSentFailed": {
+    "message": "Failed to send tab data",
+    "description": "Log: data sent failed"
+  },
+  "logFailedSendData": {
+    "message": "Failed to send data: $ERROR$",
+    "description": "Log: failed to send data",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logRefreshingTabs": {
+    "message": "Refreshing tab information...",
+    "description": "Log: refreshing tabs"
+  },
+  "logTabsRefreshed": {
+    "message": "Tab information refreshed",
+    "description": "Log: tabs refreshed"
+  },
+  "logFailedRefreshTabs": {
+    "message": "Failed to refresh tabs: $ERROR$",
+    "description": "Log: failed to refresh tabs",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logLogsCleared": {
+    "message": "Logs cleared",
+    "description": "Log: logs cleared"
+  },
+
+  "helpConnectionTitle": {
+    "message": "Connection Settings:",
+    "description": "Help: connection settings title"
+  },
+  "helpConnection1": {
+    "message": "Manually enter server address, supports ws:// and wss:// protocols",
+    "description": "Help: connection item 1"
+  },
+  "helpConnection2": {
+    "message": "Click preset addresses to quickly select preset servers",
+    "description": "Help: connection item 2"
+  },
+  "helpConnection3": {
+    "message": "Click \"Connect\" button to save address and connect to server",
+    "description": "Help: connection item 3"
+  },
+  "helpConnection4": {
+    "message": "When \"Auto Connect\" is enabled, extension automatically connects on startup and reconnects after disconnection",
+    "description": "Help: connection item 4"
+  },
+  "helpConnection5": {
+    "message": "Automatically reconnects after disconnection (using exponential backoff strategy, unlimited retries)",
+    "description": "Help: connection item 5"
+  },
+  "helpConnection6": {
+    "message": "Supports debug mode to view detailed logs",
+    "description": "Help: connection item 6"
+  },
+
+  "helpFeaturesTitle": {
+    "message": "Features:",
+    "description": "Help: features title"
+  },
+  "helpFeature1": {
+    "message": "Real-time tab synchronization",
+    "description": "Help: feature 1"
+  },
+  "helpFeature2": {
+    "message": "Remote script execution",
+    "description": "Help: feature 2"
+  },
+  "helpFeature3": {
+    "message": "Page content retrieval",
+    "description": "Help: feature 3"
+  },
+  "helpFeature4": {
+    "message": "Cookie management",
+    "description": "Help: feature 4"
+  },
+  "helpFeature5": {
+    "message": "CSS injection",
+    "description": "Help: feature 5"
+  },
+
+  "helpAddressTitle": {
+    "message": "Common Address Formats:",
+    "description": "Help: address formats title"
+  },
+  "helpAddress1": {
+    "message": "Local Development: ws://localhost:8080",
+    "description": "Help: address 1"
+  },
+  "helpAddress2": {
+    "message": "Docker Local: ws://js.local:8080 or wss://js.local:8080",
+    "description": "Help: address 2"
+  },
+  "helpAddress3": {
+    "message": "Docker WebSocket Subdomain: ws://ws.js.local or wss://ws.js.local",
+    "description": "Help: address 3"
+  },
+  "helpAddress4": {
+    "message": "LAN Server: ws://192.168.1.100:8080",
+    "description": "Help: address 4"
+  },
+  "helpAddress5": {
+    "message": "Production: wss://your-domain.com:8080",
+    "description": "Help: address 5"
+  },
+
+  "helpDockerTitle": {
+    "message": "Docker Deployment Notes:",
+    "description": "Help: docker notes title"
+  },
+  "helpDocker1": {
+    "message": "Ensure adding to hosts file: 127.0.0.1 js.local ws.js.local",
+    "description": "Help: docker note 1"
+  },
+  "helpDocker2": {
+    "message": "Docker configuration supports both 8080 port direct connection and WebSocket subdomain",
+    "description": "Help: docker note 2"
+  },
+  "helpDocker3": {
+    "message": "Production environment recommends using SSL (wss://) connection",
+    "description": "Help: docker note 3"
+  },
+  "helpDocker4": {
+    "message": "Extension will automatically try multiple addresses until connection succeeds",
+    "description": "Help: docker note 4"
+  },
+
+  "helpLinksTitle": {
+    "message": "Links:",
+    "description": "Help: links title"
+  },
+  "helpGithub": {
+    "message": "GitHub",
+    "description": "Help: GitHub link text"
+  }
+}

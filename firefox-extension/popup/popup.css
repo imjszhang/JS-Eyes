@@ -1,0 +1,167 @@
+/* JS Agent Browser Extension - Popup Neo-Brutalism Styles */
+
+/* 工程方格背景纹理 */
+body {
+  background-color: #FCD228;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* 边框宽度支持 */
+.border-3 {
+  border-width: 3px;
+}
+
+.border-b-3 {
+  border-bottom-width: 3px;
+}
+
+.border-t-3 {
+  border-top-width: 3px;
+}
+
+/* Brutal Card 样式 */
+.brutal-card {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 6px 6px 0px 0px #000000;
+  transition: all 0.1s ease-in-out;
+}
+
+.brutal-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+
+/* Brutal Button 样式 */
+.brutal-btn {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px 0px #000000;
+  font-weight: 700;
+  transition: all 0.1s;
+}
+
+.brutal-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+
+.brutal-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+.brutal-btn-primary {
+  background: #000000;
+  color: #FCD228;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px 0px #FFFFFF;
+}
+
+.brutal-btn-primary:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #FFFFFF;
+}
+
+.brutal-btn-primary:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0px 0px 0px 0px #FFFFFF;
+}
+
+/* Brutal Input 样式 */
+.brutal-input {
+  border: 3px solid #000000;
+  background: #FFFFFF;
+  box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+}
+
+.brutal-input:focus {
+  outline: none;
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+
+/* 预设按钮样式 */
+.btn-preset {
+  border: 3px solid #000000;
+  background: #FFFFFF;
+  box-shadow: 2px 2px 0px 0px #000000;
+  transition: all 0.1s;
+}
+
+.btn-preset:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px 0px #000000;
+}
+
+.btn-preset:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+/* 状态标签样式 */
+.status-badge {
+  border: 3px solid #000000;
+  font-weight: 700;
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+
+.status-badge.connected {
+  background: #00FF00;
+  color: #000000;
+}
+
+.status-badge.connecting {
+  background: #FCD228;
+  color: #000000;
+}
+
+.status-badge.disconnected {
+  background: #FF0000;
+  color: #FFFFFF;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FCD228;
+  border-left: 3px solid #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000000;
+  border: 3px solid #FCD228;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333333;
+}
+
+/* 加载状态 */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 动画效果 */
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}

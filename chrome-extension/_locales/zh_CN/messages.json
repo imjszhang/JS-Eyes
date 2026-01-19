@@ -1,0 +1,442 @@
+{
+  "extName": {
+    "message": "JS Eyes",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "DeepSeek Cowork 浏览器扩展组件 - 为 DeepSeek Cowork 提供浏览器自动化控制能力",
+    "description": "Extension description"
+  },
+
+  "appTitle": {
+    "message": "Eyes",
+    "description": "App title in header"
+  },
+
+  "serverConnection": {
+    "message": "服务器连接",
+    "description": "Server connection section title"
+  },
+  "serverAddress": {
+    "message": "服务器地址",
+    "description": "Server address label"
+  },
+  "reconnectAttempts": {
+    "message": "重连次数",
+    "description": "Reconnect attempts label"
+  },
+
+  "currentTab": {
+    "message": "当前标签页",
+    "description": "Current tab section title"
+  },
+  "labelTitle": {
+    "message": "标题",
+    "description": "Tab title label"
+  },
+  "labelUrl": {
+    "message": "网址",
+    "description": "Tab URL label"
+  },
+  "labelId": {
+    "message": "ID",
+    "description": "Tab ID label"
+  },
+
+  "browserStats": {
+    "message": "浏览器统计",
+    "description": "Browser statistics section title"
+  },
+  "totalTabs": {
+    "message": "标签页总数",
+    "description": "Total tabs label"
+  },
+  "totalWindows": {
+    "message": "窗口总数",
+    "description": "Total windows label"
+  },
+  "dataSent": {
+    "message": "已发送数据",
+    "description": "Data sent label"
+  },
+  "lastSync": {
+    "message": "最后同步",
+    "description": "Last sync label"
+  },
+
+  "activityLog": {
+    "message": "活动日志",
+    "description": "Activity log section title"
+  },
+  "connectionSettings": {
+    "message": "连接设置",
+    "description": "Connection settings section title"
+  },
+  "serverAddressLabel": {
+    "message": "服务器地址：",
+    "description": "Server address input label"
+  },
+  "presetAddresses": {
+    "message": "预设地址：",
+    "description": "Preset addresses label"
+  },
+  "autoConnect": {
+    "message": "自动连接",
+    "description": "Auto connect checkbox label"
+  },
+  "debugMode": {
+    "message": "调试模式",
+    "description": "Debug mode checkbox label"
+  },
+  "help": {
+    "message": "帮助",
+    "description": "Help section title"
+  },
+
+  "btnReconnect": {
+    "message": "重新连接",
+    "description": "Reconnect button text"
+  },
+  "btnSendData": {
+    "message": "发送数据",
+    "description": "Send data button text"
+  },
+  "btnRefresh": {
+    "message": "刷新",
+    "description": "Refresh button text"
+  },
+  "btnClear": {
+    "message": "清空",
+    "description": "Clear button text"
+  },
+  "btnConnect": {
+    "message": "连接",
+    "description": "Connect button text"
+  },
+
+  "statusConnected": {
+    "message": "已连接",
+    "description": "Connected status text"
+  },
+  "statusDisconnected": {
+    "message": "未连接",
+    "description": "Disconnected status text"
+  },
+  "statusConnecting": {
+    "message": "连接中",
+    "description": "Connecting status text"
+  },
+
+  "presetLocal": {
+    "message": "本地:8080",
+    "description": "Local preset button"
+  },
+  "presetDockerLocal": {
+    "message": "Docker本地:8080",
+    "description": "Docker local preset button"
+  },
+  "presetDockerLocalSSL": {
+    "message": "Docker本地:8080 (SSL)",
+    "description": "Docker local SSL preset button"
+  },
+  "presetDockerWS": {
+    "message": "Docker WS子域名",
+    "description": "Docker WS subdomain preset button"
+  },
+  "presetDockerWSS": {
+    "message": "Docker WSS子域名",
+    "description": "Docker WSS subdomain preset button"
+  },
+
+  "logPopupInit": {
+    "message": "弹窗已初始化",
+    "description": "Log: popup initialized"
+  },
+  "logExtensionStarted": {
+    "message": "扩展已启动",
+    "description": "Log: extension started"
+  },
+  "logSettingSaved": {
+    "message": "设置已保存：$KEY$ = $VALUE$",
+    "description": "Log: setting saved",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "debugMode"
+      },
+      "value": {
+        "content": "$2",
+        "example": "true"
+      }
+    }
+  },
+  "logFailedLoadSettings": {
+    "message": "加载设置失败：$ERROR$",
+    "description": "Log: failed to load settings",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Network error"
+      }
+    }
+  },
+  "logFailedSaveSetting": {
+    "message": "保存设置失败：$ERROR$",
+    "description": "Log: failed to save setting",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Storage error"
+      }
+    }
+  },
+  "logAutoConnectEnabled": {
+    "message": "自动连接已启用",
+    "description": "Log: auto connect enabled"
+  },
+  "logAutoConnectDisabled": {
+    "message": "自动连接已禁用",
+    "description": "Log: auto connect disabled"
+  },
+  "logFailedUpdateAutoConnect": {
+    "message": "更新自动连接设置失败",
+    "description": "Log: failed to update auto connect"
+  },
+  "logFailedToggleAutoConnect": {
+    "message": "切换自动连接失败：$ERROR$",
+    "description": "Log: failed to toggle auto connect",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logPresetSelected": {
+    "message": "已选择预设地址：$URL$",
+    "description": "Log: preset address selected",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "ws://localhost:8080"
+      }
+    }
+  },
+  "logServerEmpty": {
+    "message": "服务器地址不能为空",
+    "description": "Log: server address empty"
+  },
+  "logServerInvalidProtocol": {
+    "message": "服务器地址必须以 ws:// 或 wss:// 开头",
+    "description": "Log: invalid server protocol"
+  },
+  "logServerSaved": {
+    "message": "服务器地址已保存：$URL$",
+    "description": "Log: server address saved",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "ws://localhost:8080"
+      }
+    }
+  },
+  "logApplyingReconnect": {
+    "message": "正在应用新地址并重新连接...",
+    "description": "Log: applying and reconnecting"
+  },
+  "logFailedSaveServer": {
+    "message": "保存服务器地址失败：$ERROR$",
+    "description": "Log: failed to save server",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logFailedUpdateStatus": {
+    "message": "更新状态失败：$ERROR$",
+    "description": "Log: failed to update status",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnecting": {
+    "message": "正在重新连接...",
+    "description": "Log: reconnecting"
+  },
+  "logReconnectSent": {
+    "message": "重连请求已发送",
+    "description": "Log: reconnect request sent"
+  },
+  "logReconnectFailed": {
+    "message": "重连请求失败",
+    "description": "Log: reconnect request failed"
+  },
+  "logFailedReconnect": {
+    "message": "重新连接失败：$ERROR$",
+    "description": "Log: failed to reconnect",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logSendingData": {
+    "message": "正在发送标签页数据...",
+    "description": "Log: sending tab data"
+  },
+  "logDataSentSuccess": {
+    "message": "标签页数据发送成功",
+    "description": "Log: data sent success"
+  },
+  "logDataSentFailed": {
+    "message": "标签页数据发送失败",
+    "description": "Log: data sent failed"
+  },
+  "logFailedSendData": {
+    "message": "发送数据失败：$ERROR$",
+    "description": "Log: failed to send data",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logRefreshingTabs": {
+    "message": "正在刷新标签页信息...",
+    "description": "Log: refreshing tabs"
+  },
+  "logTabsRefreshed": {
+    "message": "标签页信息已刷新",
+    "description": "Log: tabs refreshed"
+  },
+  "logFailedRefreshTabs": {
+    "message": "刷新标签页失败：$ERROR$",
+    "description": "Log: failed to refresh tabs",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logLogsCleared": {
+    "message": "日志已清空",
+    "description": "Log: logs cleared"
+  },
+
+  "helpConnectionTitle": {
+    "message": "连接设置：",
+    "description": "Help: connection settings title"
+  },
+  "helpConnection1": {
+    "message": "手动输入服务器地址，支持 ws:// 和 wss:// 协议",
+    "description": "Help: connection item 1"
+  },
+  "helpConnection2": {
+    "message": "点击预设地址快速选择预设服务器",
+    "description": "Help: connection item 2"
+  },
+  "helpConnection3": {
+    "message": "点击「连接」按钮保存地址并连接服务器",
+    "description": "Help: connection item 3"
+  },
+  "helpConnection4": {
+    "message": "启用「自动连接」后，扩展启动时自动连接，断开后自动重连",
+    "description": "Help: connection item 4"
+  },
+  "helpConnection5": {
+    "message": "断开连接后自动重连（使用指数退避策略，无限重试）",
+    "description": "Help: connection item 5"
+  },
+  "helpConnection6": {
+    "message": "支持调试模式查看详细日志",
+    "description": "Help: connection item 6"
+  },
+
+  "helpFeaturesTitle": {
+    "message": "功能特性：",
+    "description": "Help: features title"
+  },
+  "helpFeature1": {
+    "message": "实时标签页同步",
+    "description": "Help: feature 1"
+  },
+  "helpFeature2": {
+    "message": "远程脚本执行",
+    "description": "Help: feature 2"
+  },
+  "helpFeature3": {
+    "message": "页面内容获取",
+    "description": "Help: feature 3"
+  },
+  "helpFeature4": {
+    "message": "Cookie 管理",
+    "description": "Help: feature 4"
+  },
+  "helpFeature5": {
+    "message": "CSS 注入",
+    "description": "Help: feature 5"
+  },
+
+  "helpAddressTitle": {
+    "message": "常用地址格式：",
+    "description": "Help: address formats title"
+  },
+  "helpAddress1": {
+    "message": "本地开发：ws://localhost:8080",
+    "description": "Help: address 1"
+  },
+  "helpAddress2": {
+    "message": "Docker 本地：ws://js.local:8080 或 wss://js.local:8080",
+    "description": "Help: address 2"
+  },
+  "helpAddress3": {
+    "message": "Docker WebSocket 子域名：ws://ws.js.local 或 wss://ws.js.local",
+    "description": "Help: address 3"
+  },
+  "helpAddress4": {
+    "message": "局域网服务器：ws://192.168.1.100:8080",
+    "description": "Help: address 4"
+  },
+  "helpAddress5": {
+    "message": "生产环境：wss://your-domain.com:8080",
+    "description": "Help: address 5"
+  },
+
+  "helpDockerTitle": {
+    "message": "Docker 部署说明：",
+    "description": "Help: docker notes title"
+  },
+  "helpDocker1": {
+    "message": "确保在 hosts 文件中添加：127.0.0.1 js.local ws.js.local",
+    "description": "Help: docker note 1"
+  },
+  "helpDocker2": {
+    "message": "Docker 配置支持 8080 端口直连和 WebSocket 子域名两种方式",
+    "description": "Help: docker note 2"
+  },
+  "helpDocker3": {
+    "message": "生产环境建议使用 SSL (wss://) 连接",
+    "description": "Help: docker note 3"
+  },
+  "helpDocker4": {
+    "message": "扩展会自动尝试多个地址直到连接成功",
+    "description": "Help: docker note 4"
+  },
+
+  "helpLinksTitle": {
+    "message": "相关链接：",
+    "description": "Help: links title"
+  },
+  "helpGithub": {
+    "message": "GitHub",
+    "description": "Help: GitHub link text"
+  }
+}

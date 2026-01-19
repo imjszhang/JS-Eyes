@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Firefox Extension Icons</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .icon-preview {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            align-items: center;
+        }
+        .icon-size {
+            text-align: center;
+        }
+        .icon-size img {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .download-links {
+            margin-top: 20px;
+        }
+        .download-links a {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .download-links a:hover {
+            background: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Firefox Extension Icon Generator</h1>
+        <p>Click the "Generate Icons" button to create PNG icon files of different sizes.</p>
+        
+        <button onclick="generateIcons()">Generate Icons</button>
+        <button onclick="downloadAll()">Download All Icons</button>
+        
+        <div class="icon-preview">
+            <div class="icon-size">
+                <h3>16x16</h3>
+                <canvas id="canvas16" width="16" height="16"></canvas>
+            </div>
+            <div class="icon-size">
+                <h3>32x32</h3>
+                <canvas id="canvas32" width="32" height="32"></canvas>
+            </div>
+            <div class="icon-size">
+                <h3>48x48</h3>
+                <canvas id="canvas48" width="48" height="48"></canvas>
+            </div>
+            <div class="icon-size">
+                <h3>128x128</h3>
+                <canvas id="canvas128" width="128" height="128"></canvas>
+            </div>
+        </div>
+        
+        <div class="download-links" id="downloadLinks" style="display: none;">
+            <h3>Download Icons:</h3>
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <h3>Usage Instructions:</h3>
+            <ol>
+                <li>Click the "Generate Icons" button</li>
+                <li>Right-click each icon and select "Save Image As"</li>
+                <li>Save with the corresponding filename: icon-16.png, icon-32.png, icon-48.png, icon-128.png</li>
+                <li>Place the icon files in the firefox-extension/icons/ directory</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // SVG icon data
+        const svgData = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient background: from top-left to bottom-right, from white 20% to white 5% -->
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.2" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.05" />
+    </linearGradient>
+  </defs>
+  
+  <!-- JS Yellow background -->
+  <rect width="128" height="128" rx="16" ry="16" fill="#FCD228"/>
+  
+  <!-- Rounded rectangle logo container - fills entire canvas -->
+  <rect width="128" height="128" rx="16" ry="16" fill="url(#logoGradient)" stroke="rgba(0,0,0,0.1)" stroke-width="2"/>
+  
+  <!-- Letters JS - scaled to fit -->
+  <text x="64" y="64" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="72" font-weight="700" fill="#37342F" text-anchor="middle" dominant-baseline="central">JS</text>
+</svg>`;
+
+        function generateIcons() {
+            const sizes = [16, 32, 48, 128];
+            const downloadLinks = document.getElementById('downloadLinks');
+            downloadLinks.innerHTML = '<h3>Download Icons:</h3>';
+            
+            // Disable generate button
+            const generateBtn = event?.target;
+            if (generateBtn) {
+                generateBtn.textContent = 'Generating...';
+                generateBtn.disabled = true;
+            }
+            
+            sizes.forEach(size => {
+                const canvas = document.getElementById(`canvas${size}`);
+                const ctx = canvas.getContext('2d');
+                
+                // Create image object
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        // Clear canvas
+                        ctx.clearRect(0, 0, size, size);
+                        
+                        // Draw icon
+                        ctx.drawImage(img, 0, 0, size, size);
+                        
+                        // Create download link
+                        canvas.toBlob(function(blob) {
+                            if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = `icon-${size}.png`;
+                                link.textContent = `icon-${size}.png`;
+                                link.style.marginRight = '10px';
+                                downloadLinks.appendChild(link);
+                            }
+                        }, 'image/png');
+                    } catch (error) {
+                        console.error(`Error generating ${size}x${size} icon:`, error);
+                    }
+                };
+                
+                img.onerror = function() {
+                    console.error(`Error loading ${size}x${size} icon`);
+                };
+                
+                // Set SVG data
+                try {
+                    const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                    const url = URL.createObjectURL(svgBlob);
+                    img.src = url;
+                } catch (error) {
+                    console.error('Error creating SVG data:', error);
+                }
+            });
+            
+            // Restore generate button state
+            setTimeout(() => {
+                if (generateBtn) {
+                    generateBtn.textContent = 'Generate Icons';
+                    generateBtn.disabled = false;
+                }
+                downloadLinks.style.display = 'block';
+            }, 1000);
+        }
+        
+        function downloadAll() {
+            const links = document.querySelectorAll('#downloadLinks a');
+            if (links.length === 0) {
+                alert('Please generate icons first!');
+                return;
+            }
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'Downloading...';
+            button.disabled = true;
+            
+            links.forEach((link, index) => {
+                setTimeout(() => {
+                    link.click();
+                    if (index === links.length - 1) {
+                        // Restore button after last download completes
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.disabled = false;
+                        }, 500);
+                    }
+                }, index * 500); // Delay download to avoid browser blocking
+            });
+        }
+        
+        // Auto-generate icons on page load
+        window.addEventListener('load', function() {
+            setTimeout(generateIcons, 500);
+        });
+    </script>
+</body>
+</html>
