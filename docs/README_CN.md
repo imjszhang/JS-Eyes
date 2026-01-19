@@ -42,6 +42,22 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 | Edge | 88+ | V3 |
 | Firefox | 58+ | V2 |
 
+## 下载
+
+### 最新版本
+
+从 [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest) 下载最新版本：
+
+- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.0.0.zip`
+- **Firefox 扩展**: `js-eyes-firefox-v1.0.0.xpi`
+
+### 从源代码安装
+
+如果你希望从源代码安装：
+
+1. 克隆本仓库
+2. 按照下面的安装步骤操作
+
 ## 安装步骤
 
 ### Chrome / Edge

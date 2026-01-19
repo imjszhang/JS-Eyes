@@ -18,6 +18,7 @@ dist/
 build/
 *.xpi
 *.zip
+signed-firefox-extensions/
 
 # IDE
 .vscode/
