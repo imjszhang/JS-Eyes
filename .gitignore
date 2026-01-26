@@ -1,3 +1,5 @@
+work_dir/
+
 # Firefox AMO upload metadata
 firefox-extension/.amo-upload-uuid
 

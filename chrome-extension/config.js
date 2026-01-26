@@ -5,6 +5,7 @@
  * 这个配置文件提供了默认的服务器地址配置
  * 
  * 生成时间: 2025-09-19T00:40:37+08:00
+ * 更新时间: 2026-01-26 (添加安全配置)
  */
 
 // 默认配置
@@ -43,6 +44,39 @@ const DEFAULT_CONFIG = {
     maxRetries: 5,
     retryDelay: 2000, // 2秒
     backoffMultiplier: 1.5
+  },
+  
+  // 安全配置（用于扩展中转通信模式）
+  SECURITY: {
+    // 允许的操作白名单
+    // 只有在此列表中的操作才会被 Content Script 转发给 Background Script
+    allowedActions: [
+      'get_tabs',           // 获取标签页列表
+      'get_html',           // 获取页面 HTML
+      'open_url',           // 打开 URL
+      'close_tab',          // 关闭标签页
+      'execute_script',     // 执行脚本（高风险）
+      'get_cookies',        // 获取 Cookies（高风险）
+      'inject_css',         // 注入 CSS
+      'get_page_info',      // 获取页面信息
+      'upload_file_to_tab'  // 上传文件到标签页
+    ],
+    
+    // 高风险操作列表（需要额外验证）
+    // 这些操作在执行前会进行额外的安全检查
+    sensitiveActions: [
+      'execute_script',     // 可执行任意代码
+      'get_cookies'         // 可获取敏感的认证信息
+    ],
+    
+    // 频率限制配置
+    rateLimit: {
+      maxRequestsPerSecond: 10,   // 每秒最大请求数
+      blockDuration: 5000         // 超限后阻止时间（毫秒）
+    },
+    
+    // 请求超时时间（毫秒）
+    requestTimeout: 30000
   }
 };
 

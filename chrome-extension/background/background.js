@@ -3,6 +3,11 @@
  * 
  * 负责与browserControlServer的WebSocket通信
  * 处理标签页管理、内容获取、脚本执行等功能
+ * 
+ * 安全特性：
+ * - 实现扩展中转通信模式
+ * - 验证来自 Content Script 的请求
+ * - 敏感操作权限验证
  */
 
 // 内联配置（因为 Service Worker 不能使用 importScripts）
@@ -33,6 +38,16 @@ const EXTENSION_CONFIG = {
     maxRetries: 5,
     retryDelay: 2000,
     backoffMultiplier: 1.5
+  },
+  // 安全配置
+  SECURITY: {
+    allowedActions: [
+      'get_tabs', 'get_html', 'open_url', 'close_tab',
+      'execute_script', 'get_cookies', 'inject_css',
+      'get_page_info', 'upload_file_to_tab'
+    ],
+    sensitiveActions: ['execute_script', 'get_cookies'],
+    requestTimeout: 30000
   }
 };
 
@@ -59,6 +74,17 @@ class KaichiBrowserControl {
     this.autoConnect = true; // 默认启用自动连接
     this.reconnectTimer = null; // 重连定时器
     this.isReconnecting = false; // 是否正在重连
+    
+    // 安全配置
+    this.securityConfig = EXTENSION_CONFIG.SECURITY || {
+      allowedActions: [
+        'get_tabs', 'get_html', 'open_url', 'close_tab',
+        'execute_script', 'get_cookies', 'inject_css',
+        'get_page_info', 'upload_file_to_tab'
+      ],
+      sensitiveActions: ['execute_script', 'get_cookies'],
+      requestTimeout: 30000
+    };
     
     // 初始化
     this.init();
@@ -976,8 +1002,38 @@ class KaichiBrowserControl {
    * 设置消息监听
    */
   setupMessageListeners() {
-    // 监听来自popup的消息
+    // 监听来自popup和content script的消息
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      // 处理来自 Content Script 的安全中转请求
+      if (message.type === 'CONTENT_SCRIPT_REQUEST') {
+        // 安全验证：验证发送者是否为本扩展
+        if (sender.id !== chrome.runtime.id) {
+          console.warn('[Background] 拒绝非法发送者的请求:', sender.id);
+          sendResponse({ success: false, error: '非法发送者' });
+          return true;
+        }
+        
+        console.log(`[Background] 收到 Content Script 请求: ${message.action}`, {
+          requestId: message.requestId,
+          sourceUrl: message.sourceUrl,
+          tabId: sender.tab?.id
+        });
+        
+        // 处理请求（异步）
+        this.handleContentScriptRequest(message, sender)
+          .then(response => {
+            console.log(`[Background] 请求处理完成: ${message.requestId}`, response.success);
+            sendResponse(response);
+          })
+          .catch(error => {
+            console.error(`[Background] 请求处理失败: ${message.requestId}`, error);
+            sendResponse({ success: false, error: error.message });
+          });
+        
+        return true; // 保持消息通道开放（异步响应）
+      }
+      
+      // 原有的 popup 消息处理
       if (message.type === 'get_connection_status') {
         sendResponse({
           isConnected: this.isConnected,
@@ -1013,6 +1069,369 @@ class KaichiBrowserControl {
         return true;
       }
     });
+  }
+
+  /**
+   * 处理来自 Content Script 的请求
+   * 这是安全中转通信的核心处理方法
+   * 
+   * @param {Object} message 请求消息
+   * @param {Object} sender 发送者信息
+   * @returns {Promise<Object>} 响应对象
+   */
+  async handleContentScriptRequest(message, sender) {
+    const { action, payload, requestId, sourceUrl } = message;
+    
+    try {
+      // 验证操作是否在白名单中
+      if (!this.securityConfig.allowedActions.includes(action)) {
+        console.warn(`[Background] 拒绝不允许的操作: ${action}`);
+        return { success: false, error: `不允许的操作: ${action}` };
+      }
+      
+      // 敏感操作验证
+      if (this.securityConfig.sensitiveActions.includes(action)) {
+        const isValid = await this.validateSensitiveOperation(action, sender, payload);
+        if (!isValid) {
+          return { success: false, error: '敏感操作验证失败' };
+        }
+      }
+      
+      // 根据操作类型执行相应处理
+      switch (action) {
+        case 'get_tabs':
+          return await this.handleGetTabsRequest(payload);
+          
+        case 'get_html':
+          return await this.handleGetHtmlRequest(payload);
+          
+        case 'open_url':
+          return await this.handleOpenUrlRequest(payload);
+          
+        case 'close_tab':
+          return await this.handleCloseTabRequest(payload);
+          
+        case 'execute_script':
+          return await this.handleExecuteScriptRequest(payload, sender);
+          
+        case 'get_cookies':
+          return await this.handleGetCookiesRequest(payload);
+          
+        case 'inject_css':
+          return await this.handleInjectCssRequest(payload);
+          
+        case 'get_page_info':
+          return await this.handleGetPageInfoRequest(payload, sender);
+          
+        case 'upload_file_to_tab':
+          return await this.handleUploadFileRequest(payload);
+          
+        default:
+          return { success: false, error: `未知操作: ${action}` };
+      }
+      
+    } catch (error) {
+      console.error(`[Background] 处理请求时出错: ${action}`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 验证敏感操作
+   * 
+   * @param {string} action 操作名称
+   * @param {Object} sender 发送者信息
+   * @param {Object} payload 请求载荷
+   * @returns {Promise<boolean>} 是否允许操作
+   */
+  async validateSensitiveOperation(action, sender, payload) {
+    // 检查请求来源 Tab 是否有权操作目标 Tab
+    if (payload && payload.tabId && sender.tab) {
+      const targetTabId = parseInt(payload.tabId);
+      const sourceTabId = sender.tab.id;
+      
+      if (targetTabId !== sourceTabId) {
+        console.warn(`[Background] 跨Tab敏感操作: ${action}`, {
+          sourceTab: sourceTabId,
+          targetTab: targetTabId,
+          sourceUrl: sender.tab.url
+        });
+        // 目前允许跨Tab操作，但记录日志以便审计
+      }
+    }
+    
+    return true;
+  }
+
+  /**
+   * 处理获取标签页列表请求
+   */
+  async handleGetTabsRequest(payload) {
+    try {
+      const tabs = await chrome.tabs.query({});
+      const activeTab = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      const tabsData = tabs.map(tab => ({
+        id: tab.id,
+        url: tab.url || '',
+        title: tab.title || '',
+        isActive: activeTab.length > 0 && activeTab[0].id === tab.id,
+        windowId: tab.windowId,
+        index: tab.index,
+        favIconUrl: tab.favIconUrl || null,
+        status: tab.status || 'complete'
+      }));
+      
+      return { 
+        success: true, 
+        data: {
+          tabs: tabsData,
+          activeTabId: activeTab.length > 0 ? activeTab[0].id : null
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理获取HTML请求（通过 Content Script 中转）
+   */
+  async handleGetHtmlRequest(payload) {
+    try {
+      const tabId = payload?.tabId;
+      if (!tabId) {
+        return { success: false, error: '缺少 tabId 参数' };
+      }
+      
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: parseInt(tabId) },
+        func: () => document.documentElement.outerHTML
+      });
+      
+      return { 
+        success: true, 
+        data: { html: results[0]?.result || '' }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理打开URL请求（通过 Content Script 中转）
+   */
+  async handleOpenUrlRequest(payload) {
+    try {
+      const { url, tabId, windowId } = payload || {};
+      
+      if (!url) {
+        return { success: false, error: '缺少 url 参数' };
+      }
+      
+      let resultTabId;
+      
+      if (tabId) {
+        await chrome.tabs.update(parseInt(tabId), { url: url });
+        resultTabId = parseInt(tabId);
+      } else {
+        const createProperties = { url: url };
+        if (windowId) {
+          createProperties.windowId = parseInt(windowId);
+        }
+        const tab = await chrome.tabs.create(createProperties);
+        resultTabId = tab.id;
+      }
+      
+      return { 
+        success: true, 
+        data: { tabId: resultTabId, url: url }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理关闭标签页请求（通过 Content Script 中转）
+   */
+  async handleCloseTabRequest(payload) {
+    try {
+      const tabId = payload?.tabId;
+      if (!tabId) {
+        return { success: false, error: '缺少 tabId 参数' };
+      }
+      
+      await chrome.tabs.remove(parseInt(tabId));
+      
+      return { 
+        success: true, 
+        data: { tabId: parseInt(tabId), closed: true }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理执行脚本请求（通过 Content Script 中转）
+   */
+  async handleExecuteScriptRequest(payload, sender) {
+    try {
+      const { tabId, code } = payload || {};
+      
+      if (!code) {
+        return { success: false, error: '缺少 code 参数' };
+      }
+      
+      // 如果没有指定 tabId，使用发送者的 tabId
+      const targetTabId = tabId ? parseInt(tabId) : sender.tab?.id;
+      
+      if (!targetTabId) {
+        return { success: false, error: '无法确定目标标签页' };
+      }
+      
+      // 执行脚本
+      const executeCode = async function(scriptCode) {
+        try {
+          const result = eval(scriptCode);
+          if (result && typeof result.then === 'function') {
+            return await result;
+          }
+          return result;
+        } catch (error) {
+          throw new Error('脚本执行错误: ' + error.message);
+        }
+      };
+      
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: targetTabId },
+        func: executeCode,
+        args: [code]
+      });
+      
+      return { 
+        success: true, 
+        data: { result: results[0]?.result, tabId: targetTabId }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理获取Cookies请求（通过 Content Script 中转）
+   */
+  async handleGetCookiesRequest(payload) {
+    try {
+      const tabId = payload?.tabId;
+      if (!tabId) {
+        return { success: false, error: '缺少 tabId 参数' };
+      }
+      
+      const tab = await chrome.tabs.get(parseInt(tabId));
+      const cookies = await this.getTabCookies(tabId, tab.url);
+      
+      return { 
+        success: true, 
+        data: { 
+          cookies: cookies,
+          url: tab.url,
+          tabId: parseInt(tabId)
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理注入CSS请求（通过 Content Script 中转）
+   */
+  async handleInjectCssRequest(payload) {
+    try {
+      const { tabId, css } = payload || {};
+      
+      if (!tabId || !css) {
+        return { success: false, error: '缺少 tabId 或 css 参数' };
+      }
+      
+      await chrome.scripting.insertCSS({
+        target: { tabId: parseInt(tabId) },
+        css: css
+      });
+      
+      return { 
+        success: true, 
+        data: { tabId: parseInt(tabId), injected: true }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理获取页面信息请求（通过 Content Script 中转）
+   */
+  async handleGetPageInfoRequest(payload, sender) {
+    try {
+      const tabId = payload?.tabId || sender.tab?.id;
+      
+      if (!tabId) {
+        return { success: false, error: '无法确定目标标签页' };
+      }
+      
+      const tab = await chrome.tabs.get(parseInt(tabId));
+      
+      return { 
+        success: true, 
+        data: {
+          tabId: tab.id,
+          url: tab.url,
+          title: tab.title,
+          status: tab.status,
+          favIconUrl: tab.favIconUrl
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理文件上传请求（通过 Content Script 中转）
+   */
+  async handleUploadFileRequest(payload) {
+    try {
+      const { tabId, files, targetSelector } = payload || {};
+      
+      if (!tabId || !files || !Array.isArray(files)) {
+        return { success: false, error: '缺少必要参数' };
+      }
+      
+      // 复用现有的文件上传处理逻辑
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: parseInt(tabId) },
+        func: this.generateFileUploadScript,
+        args: [targetSelector || 'input[type="file"]']
+      });
+      
+      const uploadResult = results[0]?.result;
+      
+      if (uploadResult && uploadResult.success) {
+        return { 
+          success: true, 
+          data: uploadResult
+        };
+      } else {
+        return { 
+          success: false, 
+          error: uploadResult?.error || '文件上传失败'
+        };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 
   /**

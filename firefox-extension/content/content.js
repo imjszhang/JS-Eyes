@@ -2,12 +2,36 @@
  * Kaichi Browser Control Extension - Content Script
  * 
  * 在网页中运行，负责获取页面信息和执行页面操作
+ * 
+ * 安全特性：
+ * - 实现扩展中转通信模式，所有来自注入脚本的请求都必须经过此脚本转发
+ * - postMessage 来源验证
+ * - 命令白名单验证
+ * - 请求频率限制
  */
 
 class KaichiContentScript {
   constructor() {
     this.isInitialized = false;
     this.pageInfo = null;
+    
+    // 安全相关：频率限制
+    this.requestCount = 0;
+    this.maxRequestsPerSecond = 10;
+    this.isBlocked = false;
+    this.blockDuration = 5000; // 超限后阻止5秒
+    
+    // 允许的操作白名单
+    this.allowedActions = [
+      'get_tabs', 'get_html', 'open_url', 'close_tab',
+      'execute_script', 'get_cookies', 'inject_css',
+      'get_page_info', 'upload_file_to_tab'
+    ];
+    
+    // 启动频率限制重置定时器
+    this.requestResetInterval = setInterval(() => {
+      this.requestCount = 0;
+    }, 1000);
     
     this.init();
   }
@@ -39,13 +63,16 @@ class KaichiContentScript {
     // 收集页面基本信息
     this.collectPageInfo();
     
-    // 设置消息监听
+    // 设置消息监听（来自 Background Script）
     this.setupMessageListeners();
+    
+    // 设置页面消息监听（来自注入脚本的 postMessage）
+    this.setupPageMessageListener();
     
     // 监听页面变化
     this.setupPageObserver();
     
-    console.log('Kaichi Content Script 初始化完成');
+    console.log('Kaichi Content Script 初始化完成（安全中转模式已启用）');
   }
 
   /**
@@ -320,7 +347,7 @@ class KaichiContentScript {
   }
 
   /**
-   * 设置消息监听
+   * 设置消息监听（来自 Background Script）
    */
   setupMessageListeners() {
     // 监听来自background script的消息
@@ -388,6 +415,126 @@ class KaichiContentScript {
       
       return true; // 保持消息通道开放
     });
+  }
+
+  /**
+   * 设置页面消息监听（来自注入脚本的 postMessage）
+   * 这是安全中转通信的核心功能
+   */
+  setupPageMessageListener() {
+    window.addEventListener('message', async (event) => {
+      // 安全验证 1：只处理来自当前窗口的消息（防止 iframe 伪造）
+      if (event.source !== window) {
+        return;
+      }
+      
+      // 类型验证：只处理 EXTENSION_REQUEST 类型的消息
+      if (!event.data || event.data.type !== 'EXTENSION_REQUEST') {
+        return;
+      }
+      
+      console.log('[Content Script] 收到页面请求:', event.data.action);
+      
+      // 处理请求并转发给 Background Script
+      await this.handlePageRequest(event.data);
+    });
+    
+    console.log('[Content Script] 页面消息监听器已设置');
+  }
+
+  /**
+   * 检查请求频率限制
+   * @returns {boolean} 如果允许请求返回 true，否则返回 false
+   */
+  checkRateLimit() {
+    // 如果正在被阻止
+    if (this.isBlocked) {
+      console.warn('[Content Script] 请求被阻止：超过频率限制');
+      return false;
+    }
+    
+    this.requestCount++;
+    
+    // 检查是否超过限制
+    if (this.requestCount > this.maxRequestsPerSecond) {
+      console.warn(`[Content Script] 请求频率过高 (${this.requestCount}/${this.maxRequestsPerSecond})，暂时阻止请求`);
+      this.isBlocked = true;
+      
+      // 设置解除阻止的定时器
+      setTimeout(() => {
+        this.isBlocked = false;
+        this.requestCount = 0;
+        console.log('[Content Script] 请求阻止已解除');
+      }, this.blockDuration);
+      
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * 处理来自页面的请求
+   * @param {Object} request 请求对象
+   */
+  async handlePageRequest(request) {
+    const { action, payload, requestId } = request;
+    
+    // 安全验证 2：检查频率限制
+    if (!this.checkRateLimit()) {
+      this.sendResponseToPage(requestId, false, null, '请求频率过高，请稍后再试');
+      return;
+    }
+    
+    // 安全验证 3：命令白名单验证
+    if (!this.allowedActions.includes(action)) {
+      console.warn(`[Content Script] 拒绝不允许的操作: ${action}`);
+      this.sendResponseToPage(requestId, false, null, `不允许的操作: ${action}`);
+      return;
+    }
+    
+    try {
+      // 转发请求给 Background Script
+      const response = await browser.runtime.sendMessage({
+        type: 'CONTENT_SCRIPT_REQUEST',
+        action: action,
+        payload: payload || {},
+        requestId: requestId,
+        sourceUrl: window.location.href,
+        sourceOrigin: window.location.origin
+      });
+      
+      // 将响应转发回页面
+      if (response) {
+        this.sendResponseToPage(requestId, response.success, response.data, response.error);
+      } else {
+        this.sendResponseToPage(requestId, false, null, 'Background Script 无响应');
+      }
+      
+    } catch (error) {
+      console.error('[Content Script] 转发请求时出错:', error);
+      this.sendResponseToPage(requestId, false, null, error.message);
+    }
+  }
+
+  /**
+   * 将响应发送回页面
+   * @param {string} requestId 请求ID
+   * @param {boolean} success 是否成功
+   * @param {*} data 响应数据
+   * @param {string} error 错误信息
+   */
+  sendResponseToPage(requestId, success, data, error) {
+    window.postMessage({
+      type: 'EXTENSION_RESPONSE',
+      requestId: requestId,
+      success: success,
+      data: data,
+      error: error || null,
+      timestamp: new Date().toISOString()
+    }, '*');
+    
+    console.log(`[Content Script] 响应已发送: requestId=${requestId}, success=${success}`);
   }
 
   /**
