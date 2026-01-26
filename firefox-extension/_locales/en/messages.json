@@ -438,5 +438,100 @@
   "helpGithub": {
     "message": "GitHub",
     "description": "Help: GitHub link text"
+  },
+
+  "authStatus": {
+    "message": "Auth Status",
+    "description": "Auth status label"
+  },
+  "authKeyLabel": {
+    "message": "Authentication Key:",
+    "description": "Auth key input label"
+  },
+  "authKeyHint": {
+    "message": "Key is stored locally and never transmitted",
+    "description": "Auth key hint text"
+  },
+  "authKeyNotConfiguredHint": {
+    "message": "Please configure authentication key to connect",
+    "description": "Auth key not configured hint"
+  },
+  "btnSave": {
+    "message": "Save",
+    "description": "Save button text"
+  },
+  "btnClearKey": {
+    "message": "Clear Key",
+    "description": "Clear key button text"
+  },
+
+  "statusNotConfigured": {
+    "message": "Not Configured",
+    "description": "Not configured status text"
+  },
+  "statusAuthenticating": {
+    "message": "Authenticating",
+    "description": "Authenticating status text"
+  },
+  "statusAuthenticated": {
+    "message": "Authenticated",
+    "description": "Authenticated status text"
+  },
+  "statusAuthFailed": {
+    "message": "Auth Failed",
+    "description": "Auth failed status text"
+  },
+  "statusPending": {
+    "message": "Pending",
+    "description": "Pending status text"
+  },
+
+  "logAuthKeyEmpty": {
+    "message": "Authentication key cannot be empty",
+    "description": "Log: auth key empty"
+  },
+  "logAuthKeySaved": {
+    "message": "Authentication key saved",
+    "description": "Log: auth key saved"
+  },
+  "logAuthKeySaveFailed": {
+    "message": "Failed to save authentication key",
+    "description": "Log: auth key save failed"
+  },
+  "logAuthKeySaveError": {
+    "message": "Error saving authentication key: $ERROR$",
+    "description": "Log: auth key save error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnectForAuth": {
+    "message": "Reconnecting for authentication...",
+    "description": "Log: reconnecting for authentication"
+  },
+  "logAuthKeyCleared": {
+    "message": "Authentication key cleared",
+    "description": "Log: auth key cleared"
+  },
+  "logAuthKeyClearFailed": {
+    "message": "Failed to clear authentication key",
+    "description": "Log: auth key clear failed"
+  },
+  "logAuthKeyClearError": {
+    "message": "Error clearing authentication key: $ERROR$",
+    "description": "Log: auth key clear error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "confirmClearAuthKey": {
+    "message": "Are you sure you want to clear the authentication key?",
+    "description": "Confirm clear auth key dialog"
   }
 }

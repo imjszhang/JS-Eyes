@@ -25,6 +25,10 @@
     "message": "Reconnect Attempts",
     "description": "Reconnect attempts label"
   },
+  "authStatus": {
+    "message": "Auth Status",
+    "description": "Authentication status label"
+  },
 
   "currentTab": {
     "message": "Current Tab",
@@ -113,6 +117,14 @@
     "message": "Connect",
     "description": "Connect button text"
   },
+  "btnSave": {
+    "message": "Save",
+    "description": "Save button text"
+  },
+  "btnClearKey": {
+    "message": "Clear Key",
+    "description": "Clear auth key button text"
+  },
 
   "statusConnected": {
     "message": "Connected",
@@ -125,6 +137,43 @@
   "statusConnecting": {
     "message": "Connecting",
     "description": "Connecting status text"
+  },
+  "statusNotConfigured": {
+    "message": "Not Configured",
+    "description": "Auth not configured status"
+  },
+  "statusAuthenticated": {
+    "message": "Authenticated",
+    "description": "Authenticated status"
+  },
+  "statusAuthenticating": {
+    "message": "Authenticating",
+    "description": "Authenticating status"
+  },
+  "statusAuthFailed": {
+    "message": "Auth Failed",
+    "description": "Auth failed status"
+  },
+  "statusPending": {
+    "message": "Pending",
+    "description": "Auth pending status"
+  },
+
+  "authKeyLabel": {
+    "message": "Authentication Key:",
+    "description": "Auth key input label"
+  },
+  "authKeyHint": {
+    "message": "Key is stored locally and never transmitted",
+    "description": "Auth key hint text"
+  },
+  "authKeyNotConfiguredHint": {
+    "message": "Please configure authentication key to connect",
+    "description": "Auth key not configured hint"
+  },
+  "confirmClearAuthKey": {
+    "message": "Are you sure you want to clear the authentication key?",
+    "description": "Confirm clear auth key dialog"
   },
 
   "presetLocal": {
@@ -329,6 +378,51 @@
   "logLogsCleared": {
     "message": "Logs cleared",
     "description": "Log: logs cleared"
+  },
+
+  "logAuthKeyEmpty": {
+    "message": "Authentication key cannot be empty",
+    "description": "Log: auth key empty"
+  },
+  "logAuthKeySaved": {
+    "message": "Authentication key saved",
+    "description": "Log: auth key saved"
+  },
+  "logAuthKeySaveFailed": {
+    "message": "Failed to save authentication key",
+    "description": "Log: failed to save auth key"
+  },
+  "logAuthKeySaveError": {
+    "message": "Error saving authentication key: $ERROR$",
+    "description": "Log: auth key save error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnectForAuth": {
+    "message": "Reconnecting for authentication...",
+    "description": "Log: reconnecting for auth"
+  },
+  "logAuthKeyCleared": {
+    "message": "Authentication key cleared",
+    "description": "Log: auth key cleared"
+  },
+  "logAuthKeyClearFailed": {
+    "message": "Failed to clear authentication key",
+    "description": "Log: failed to clear auth key"
+  },
+  "logAuthKeyClearError": {
+    "message": "Error clearing authentication key: $ERROR$",
+    "description": "Log: auth key clear error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
   },
 
   "helpConnectionTitle": {

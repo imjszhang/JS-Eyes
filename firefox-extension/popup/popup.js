@@ -50,6 +50,9 @@ class JSEyesPopup {
     // 更新状态
     this.updateStatus();
     
+    // 检查认证密钥状态
+    this.checkAuthKeyStatus();
+    
     // 开始定期更新
     this.startPeriodicUpdate();
     
@@ -130,6 +133,29 @@ class JSEyesPopup {
         const url = e.target.getAttribute('data-url');
         this.selectPresetUrl(url);
       });
+    });
+    
+    // 认证密钥相关事件
+    // 保存认证密钥按钮
+    document.getElementById('save-auth-key').addEventListener('click', () => {
+      this.saveAuthKey();
+    });
+    
+    // 认证密钥输入框回车
+    document.getElementById('auth-key-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        this.saveAuthKey();
+      }
+    });
+    
+    // 切换密钥可见性按钮
+    document.getElementById('toggle-key-visibility').addEventListener('click', () => {
+      this.toggleKeyVisibility();
+    });
+    
+    // 清除认证密钥按钮
+    document.getElementById('clear-auth-key').addEventListener('click', () => {
+      this.clearAuthKey();
     });
   }
 
@@ -296,6 +322,7 @@ class JSEyesPopup {
     const statusElement = document.getElementById('connection-status');
     const serverUrlElement = document.getElementById('server-url');
     const reconnectAttemptsElement = document.getElementById('reconnect-attempts');
+    const authStatusElement = document.getElementById('auth-status');
     
     // 更新连接状态 - 使用 Neo-Brutalism 样式类
     const baseClasses = 'status-badge px-3 py-1 text-xs font-bold uppercase';
@@ -317,6 +344,167 @@ class JSEyesPopup {
     
     // 更新重连次数
     reconnectAttemptsElement.textContent = status.reconnectAttempts || 0;
+    
+    // 更新认证状态
+    if (authStatusElement) {
+      this.updateAuthStatusDisplay(status.authState, status.hasAuthKey);
+    }
+  }
+
+  /**
+   * 更新认证状态显示
+   */
+  updateAuthStatusDisplay(authState, hasAuthKey) {
+    const authStatusElement = document.getElementById('auth-status');
+    if (!authStatusElement) return;
+    
+    const baseClasses = 'status-badge px-3 py-1 text-xs font-bold uppercase';
+    
+    if (!hasAuthKey) {
+      authStatusElement.textContent = browser.i18n.getMessage('statusNotConfigured') || 'Not Configured';
+      authStatusElement.className = `${baseClasses} disconnected`;
+    } else {
+      switch (authState) {
+        case 'authenticated':
+          authStatusElement.textContent = browser.i18n.getMessage('statusAuthenticated') || 'Authenticated';
+          authStatusElement.className = `${baseClasses} connected`;
+          break;
+        case 'authenticating':
+          authStatusElement.textContent = browser.i18n.getMessage('statusAuthenticating') || 'Authenticating';
+          authStatusElement.className = `${baseClasses} connecting pulse`;
+          break;
+        case 'failed':
+          authStatusElement.textContent = browser.i18n.getMessage('statusAuthFailed') || 'Auth Failed';
+          authStatusElement.className = `${baseClasses} disconnected`;
+          break;
+        default:
+          authStatusElement.textContent = browser.i18n.getMessage('statusPending') || 'Pending';
+          authStatusElement.className = `${baseClasses} disconnected`;
+      }
+    }
+  }
+
+  /**
+   * 保存认证密钥
+   */
+  async saveAuthKey() {
+    const authKeyInput = document.getElementById('auth-key-input');
+    const authKey = authKeyInput.value.trim();
+    
+    if (!authKey) {
+      this.addLog(browser.i18n.getMessage('logAuthKeyEmpty') || 'Auth key cannot be empty');
+      return;
+    }
+    
+    try {
+      // 通知 background script 保存密钥
+      const response = await browser.runtime.sendMessage({
+        type: 'save_auth_key',
+        authKey: authKey
+      });
+      
+      if (response && response.success) {
+        this.addLog(browser.i18n.getMessage('logAuthKeySaved') || 'Auth key saved');
+        
+        // 清空输入框（安全考虑）
+        authKeyInput.value = '';
+        
+        // 更新状态
+        setTimeout(() => {
+          this.updateStatus();
+        }, 1000);
+        
+        // 如果已连接，提示需要重新连接
+        this.addLog(browser.i18n.getMessage('logReconnectForAuth') || 'Reconnecting for authentication...');
+      } else {
+        this.addLog(browser.i18n.getMessage('logAuthKeySaveFailed') || 'Failed to save auth key');
+      }
+      
+    } catch (error) {
+      console.error('保存认证密钥时出错:', error);
+      this.addLog(browser.i18n.getMessage('logAuthKeySaveError', error.message) || `Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * 切换密钥可见性
+   */
+  toggleKeyVisibility() {
+    const authKeyInput = document.getElementById('auth-key-input');
+    const eyeIcon = document.getElementById('eye-icon');
+    const eyeOffIcon = document.getElementById('eye-off-icon');
+    
+    if (authKeyInput.type === 'password') {
+      authKeyInput.type = 'text';
+      eyeIcon.classList.add('hidden');
+      eyeOffIcon.classList.remove('hidden');
+    } else {
+      authKeyInput.type = 'password';
+      eyeIcon.classList.remove('hidden');
+      eyeOffIcon.classList.add('hidden');
+    }
+  }
+
+  /**
+   * 清除认证密钥
+   */
+  async clearAuthKey() {
+    try {
+      // 确认清除
+      const confirmMessage = browser.i18n.getMessage('confirmClearAuthKey') || 'Are you sure you want to clear the authentication key?';
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+      
+      // 通知 background script 清除密钥
+      const response = await browser.runtime.sendMessage({
+        type: 'clear_auth_key'
+      });
+      
+      if (response && response.success) {
+        this.addLog(browser.i18n.getMessage('logAuthKeyCleared') || 'Auth key cleared');
+        
+        // 清空输入框
+        document.getElementById('auth-key-input').value = '';
+        
+        // 更新状态
+        setTimeout(() => {
+          this.updateStatus();
+        }, 500);
+      } else {
+        this.addLog(browser.i18n.getMessage('logAuthKeyClearFailed') || 'Failed to clear auth key');
+      }
+      
+    } catch (error) {
+      console.error('清除认证密钥时出错:', error);
+      this.addLog(browser.i18n.getMessage('logAuthKeyClearError', error.message) || `Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * 检查是否已配置认证密钥
+   */
+  async checkAuthKeyStatus() {
+    try {
+      const response = await browser.runtime.sendMessage({
+        type: 'get_auth_status'
+      });
+      
+      if (response) {
+        this.updateAuthStatusDisplay(response.authState, response.hasAuthKey);
+        
+        // 如果未配置密钥，显示提示
+        if (!response.hasAuthKey) {
+          const hint = document.getElementById('auth-key-hint');
+          if (hint) {
+            hint.textContent = browser.i18n.getMessage('authKeyNotConfiguredHint') || 'Please configure authentication key to connect';
+            hint.classList.add('text-red-600');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('检查认证密钥状态时出错:', error);
+    }
   }
 
   /**

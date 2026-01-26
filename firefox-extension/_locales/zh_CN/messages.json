@@ -438,5 +438,100 @@
   "helpGithub": {
     "message": "GitHub",
     "description": "Help: GitHub link text"
+  },
+
+  "authStatus": {
+    "message": "认证状态",
+    "description": "Auth status label"
+  },
+  "authKeyLabel": {
+    "message": "认证密钥：",
+    "description": "Auth key input label"
+  },
+  "authKeyHint": {
+    "message": "密钥仅存储在本地，不会传输",
+    "description": "Auth key hint text"
+  },
+  "authKeyNotConfiguredHint": {
+    "message": "请配置认证密钥以连接服务器",
+    "description": "Auth key not configured hint"
+  },
+  "btnSave": {
+    "message": "保存",
+    "description": "Save button text"
+  },
+  "btnClearKey": {
+    "message": "清除密钥",
+    "description": "Clear key button text"
+  },
+
+  "statusNotConfigured": {
+    "message": "未配置",
+    "description": "Not configured status text"
+  },
+  "statusAuthenticating": {
+    "message": "认证中",
+    "description": "Authenticating status text"
+  },
+  "statusAuthenticated": {
+    "message": "已认证",
+    "description": "Authenticated status text"
+  },
+  "statusAuthFailed": {
+    "message": "认证失败",
+    "description": "Auth failed status text"
+  },
+  "statusPending": {
+    "message": "待认证",
+    "description": "Pending status text"
+  },
+
+  "logAuthKeyEmpty": {
+    "message": "认证密钥不能为空",
+    "description": "Log: auth key empty"
+  },
+  "logAuthKeySaved": {
+    "message": "认证密钥已保存",
+    "description": "Log: auth key saved"
+  },
+  "logAuthKeySaveFailed": {
+    "message": "保存认证密钥失败",
+    "description": "Log: auth key save failed"
+  },
+  "logAuthKeySaveError": {
+    "message": "保存认证密钥出错：$ERROR$",
+    "description": "Log: auth key save error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnectForAuth": {
+    "message": "正在重新连接以进行认证...",
+    "description": "Log: reconnecting for authentication"
+  },
+  "logAuthKeyCleared": {
+    "message": "认证密钥已清除",
+    "description": "Log: auth key cleared"
+  },
+  "logAuthKeyClearFailed": {
+    "message": "清除认证密钥失败",
+    "description": "Log: auth key clear failed"
+  },
+  "logAuthKeyClearError": {
+    "message": "清除认证密钥出错：$ERROR$",
+    "description": "Log: auth key clear error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "confirmClearAuthKey": {
+    "message": "确定要清除认证密钥吗？",
+    "description": "Confirm clear auth key dialog"
   }
 }

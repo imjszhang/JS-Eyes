@@ -25,6 +25,10 @@
     "message": "重连次数",
     "description": "Reconnect attempts label"
   },
+  "authStatus": {
+    "message": "认证状态",
+    "description": "Authentication status label"
+  },
 
   "currentTab": {
     "message": "当前标签页",
@@ -113,6 +117,14 @@
     "message": "连接",
     "description": "Connect button text"
   },
+  "btnSave": {
+    "message": "保存",
+    "description": "Save button text"
+  },
+  "btnClearKey": {
+    "message": "清除密钥",
+    "description": "Clear auth key button text"
+  },
 
   "statusConnected": {
     "message": "已连接",
@@ -125,6 +137,43 @@
   "statusConnecting": {
     "message": "连接中",
     "description": "Connecting status text"
+  },
+  "statusNotConfigured": {
+    "message": "未配置",
+    "description": "Auth not configured status"
+  },
+  "statusAuthenticated": {
+    "message": "已认证",
+    "description": "Authenticated status"
+  },
+  "statusAuthenticating": {
+    "message": "认证中",
+    "description": "Authenticating status"
+  },
+  "statusAuthFailed": {
+    "message": "认证失败",
+    "description": "Auth failed status"
+  },
+  "statusPending": {
+    "message": "等待中",
+    "description": "Auth pending status"
+  },
+
+  "authKeyLabel": {
+    "message": "认证密钥：",
+    "description": "Auth key input label"
+  },
+  "authKeyHint": {
+    "message": "密钥仅存储在本地，不会被传输",
+    "description": "Auth key hint text"
+  },
+  "authKeyNotConfiguredHint": {
+    "message": "请配置认证密钥以连接服务器",
+    "description": "Auth key not configured hint"
+  },
+  "confirmClearAuthKey": {
+    "message": "确定要清除认证密钥吗？",
+    "description": "Confirm clear auth key dialog"
   },
 
   "presetLocal": {
@@ -329,6 +378,51 @@
   "logLogsCleared": {
     "message": "日志已清空",
     "description": "Log: logs cleared"
+  },
+
+  "logAuthKeyEmpty": {
+    "message": "认证密钥不能为空",
+    "description": "Log: auth key empty"
+  },
+  "logAuthKeySaved": {
+    "message": "认证密钥已保存",
+    "description": "Log: auth key saved"
+  },
+  "logAuthKeySaveFailed": {
+    "message": "保存认证密钥失败",
+    "description": "Log: failed to save auth key"
+  },
+  "logAuthKeySaveError": {
+    "message": "保存认证密钥出错：$ERROR$",
+    "description": "Log: auth key save error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
+  },
+  "logReconnectForAuth": {
+    "message": "正在重新连接以进行认证...",
+    "description": "Log: reconnecting for auth"
+  },
+  "logAuthKeyCleared": {
+    "message": "认证密钥已清除",
+    "description": "Log: auth key cleared"
+  },
+  "logAuthKeyClearFailed": {
+    "message": "清除认证密钥失败",
+    "description": "Log: failed to clear auth key"
+  },
+  "logAuthKeyClearError": {
+    "message": "清除认证密钥出错：$ERROR$",
+    "description": "Log: auth key clear error",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Error message"
+      }
+    }
   },
 
   "helpConnectionTitle": {

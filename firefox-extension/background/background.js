@@ -44,8 +44,21 @@ class KaichiBrowserControl {
             'get_page_info', 'upload_file_to_tab'
           ],
           sensitiveActions: ['execute_script', 'get_cookies'],
-          requestTimeout: 30000
+          requestTimeout: 30000,
+          auth: {
+            storageKey: 'auth_secret_key',
+            authTimeout: 10000,
+            sessionRefreshBefore: 300
+          }
         };
+    
+    // 认证相关属性
+    this.sessionId = null;           // 会话ID
+    this.authState = 'disconnected'; // disconnected | authenticating | authenticated | failed
+    this.pendingChallenge = null;    // 等待响应的 challenge
+    this.authSecretKey = null;       // 认证密钥（从 storage 加载）
+    this.sessionExpiresAt = null;    // 会话过期时间
+    this.authTimeout = null;         // 认证超时定时器
     
     // 初始化
     this.init();
@@ -83,7 +96,8 @@ class KaichiBrowserControl {
    */
   async loadSettings() {
     try {
-      const result = await browser.storage.local.get(['serverUrl', 'autoConnect']);
+      const authStorageKey = this.securityConfig.auth?.storageKey || 'auth_secret_key';
+      const result = await browser.storage.local.get(['serverUrl', 'autoConnect', authStorageKey]);
       
       if (result.serverUrl) {
         // 使用用户设置的服务器地址
@@ -104,11 +118,97 @@ class KaichiBrowserControl {
         console.log('使用默认自动连接设置: 启用');
       }
       
+      // 加载认证密钥
+      if (result[authStorageKey]) {
+        this.authSecretKey = result[authStorageKey];
+        console.log('已加载认证密钥');
+      } else {
+        this.authSecretKey = null;
+        console.log('未配置认证密钥');
+      }
+      
     } catch (error) {
       console.error('加载设置时出错:', error);
       // 使用默认设置
       this.serverUrl = this.defaultServerUrls[0];
       this.autoConnect = true;
+      this.authSecretKey = null;
+    }
+  }
+
+  /**
+   * 保存认证密钥
+   * @param {string} authKey - 认证密钥
+   */
+  async saveAuthKey(authKey) {
+    try {
+      const authStorageKey = this.securityConfig.auth?.storageKey || 'auth_secret_key';
+      await browser.storage.local.set({ [authStorageKey]: authKey });
+      this.authSecretKey = authKey;
+      console.log('认证密钥已保存');
+      
+      // 如果当前已连接但未认证，尝试重新连接以进行认证
+      if (this.isConnected && this.authState !== 'authenticated') {
+        console.log('检测到新密钥，正在重新连接...');
+        this.reconnectWithNewSettings();
+      }
+    } catch (error) {
+      console.error('保存认证密钥失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 清除认证密钥
+   */
+  async clearAuthKey() {
+    try {
+      const authStorageKey = this.securityConfig.auth?.storageKey || 'auth_secret_key';
+      await browser.storage.local.remove(authStorageKey);
+      this.authSecretKey = null;
+      this.sessionId = null;
+      this.authState = 'disconnected';
+      console.log('认证密钥已清除');
+    } catch (error) {
+      console.error('清除认证密钥失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 计算 HMAC-SHA256
+   * 使用 Web Crypto API 实现
+   * 
+   * @param {string} secretKey - 密钥
+   * @param {string} message - 要签名的消息
+   * @returns {Promise<string>} - 64位十六进制字符串（小写）
+   */
+  async computeHMAC(secretKey, message) {
+    try {
+      const encoder = new TextEncoder();
+      const keyData = encoder.encode(secretKey);
+      
+      // 导入密钥
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      
+      // 计算 HMAC
+      const messageData = encoder.encode(message);
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+      
+      // 转为十六进制字符串
+      const hashArray = Array.from(new Uint8Array(signature));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      return hashHex;
+    } catch (error) {
+      console.error('计算 HMAC 失败:', error);
+      throw error;
     }
   }
 
@@ -118,13 +218,27 @@ class KaichiBrowserControl {
   connect() {
     try {
       console.log(`正在连接到 ${this.serverUrl}...`);
+      
+      // 重置认证状态
+      this.authState = 'disconnected';
+      this.sessionId = null;
+      this.pendingChallenge = null;
+      this.sessionExpiresAt = null;
+      
+      // 清除认证超时
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      
       this.ws = new WebSocket(this.serverUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket连接已建立');
+        console.log('WebSocket连接已建立，等待服务器认证挑战...');
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.isReconnecting = false;
+        this.authState = 'authenticating';
         
         // 清除重连定时器
         if (this.reconnectTimer) {
@@ -132,15 +246,26 @@ class KaichiBrowserControl {
           this.reconnectTimer = null;
         }
         
-        // 发送初始化消息
-        this.sendMessage({
-          type: 'init',
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent
-        });
-        
-        // 立即发送一次标签页数据
-        this.sendTabsData();
+        // 设置认证超时（如果服务器不发送 challenge，可能是旧版服务器）
+        const authTimeout = this.securityConfig.auth?.authTimeout || 10000;
+        this.authTimeout = setTimeout(() => {
+          if (this.authState === 'authenticating' && !this.pendingChallenge) {
+            // 服务器没有发送 challenge，按旧版逻辑处理（向后兼容）
+            console.log('服务器未发送认证挑战，按旧版协议处理');
+            this.authState = 'authenticated';
+            this.sessionId = null; // 旧版协议无 sessionId
+            
+            // 发送初始化消息（旧版协议）
+            this.sendRawMessage({
+              type: 'init',
+              timestamp: new Date().toISOString(),
+              userAgent: navigator.userAgent
+            });
+            
+            // 立即发送一次标签页数据
+            this.sendTabsData();
+          }
+        }, authTimeout);
       };
       
       this.ws.onmessage = (event) => {
@@ -150,6 +275,25 @@ class KaichiBrowserControl {
       this.ws.onclose = (event) => {
         console.log('WebSocket连接已关闭:', event.code, event.reason);
         this.isConnected = false;
+        
+        // 清除认证超时
+        if (this.authTimeout) {
+          clearTimeout(this.authTimeout);
+          this.authTimeout = null;
+        }
+        
+        // 如果是认证失败导致的关闭（4001-4004 是自定义认证错误码），不自动重连
+        const isAuthError = event.code >= 4001 && event.code <= 4010;
+        if (isAuthError || this.authState === 'failed') {
+          console.log('认证失败，不自动重连。错误码:', event.code, event.reason);
+          this.authState = 'failed';
+          this.sessionId = null;
+          return;
+        }
+        
+        // 重置认证状态
+        this.authState = 'disconnected';
+        this.sessionId = null;
         
         // 如果启用自动连接，则尝试重连
         if (this.autoConnect && !this.isReconnecting) {
@@ -178,11 +322,154 @@ class KaichiBrowserControl {
     }
   }
 
+  /**
+   * 处理服务器认证挑战
+   * @param {Object} message - 认证挑战消息
+   */
+  async handleAuthChallenge(message) {
+    try {
+      const { challenge, timestamp, serverVersion } = message;
+      
+      console.log('收到服务器认证挑战:', { 
+        challengeLength: challenge?.length,
+        serverVersion,
+        timestamp 
+      });
+      
+      // 清除认证超时（收到 challenge 说明是新版服务器）
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      
+      // 检查是否配置了密钥
+      if (!this.authSecretKey) {
+        console.error('未配置认证密钥，无法完成认证');
+        this.authState = 'failed';
+        // 关闭连接
+        if (this.ws) {
+          this.ws.close(4001, '未配置认证密钥');
+        }
+        return;
+      }
+      
+      // 保存 challenge 用于验证
+      this.pendingChallenge = challenge;
+      
+      // 计算 HMAC 响应
+      const response = await this.computeHMAC(this.authSecretKey, challenge);
+      
+      // 发送认证响应
+      this.sendRawMessage({
+        type: 'auth_response',
+        clientId: browser.runtime.id,
+        clientType: 'extension',
+        response: response,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log('已发送认证响应');
+      
+      // 设置认证结果超时
+      const authResultTimeout = this.securityConfig.auth?.authTimeout || 10000;
+      this.authTimeout = setTimeout(() => {
+        if (this.authState === 'authenticating') {
+          console.error('等待认证结果超时');
+          this.authState = 'failed';
+          if (this.ws) {
+            this.ws.close(4002, '认证超时');
+          }
+        }
+      }, authResultTimeout);
+      
+    } catch (error) {
+      console.error('处理认证挑战时出错:', error);
+      this.authState = 'failed';
+      if (this.ws) {
+        this.ws.close(4003, '认证处理错误');
+      }
+    }
+  }
 
   /**
-   * 发送消息到服务器
+   * 处理服务器认证结果
+   * @param {Object} message - 认证结果消息
    */
-  sendMessage(message) {
+  handleAuthResult(message) {
+    // 清除认证超时
+    if (this.authTimeout) {
+      clearTimeout(this.authTimeout);
+      this.authTimeout = null;
+    }
+    
+    if (message.success) {
+      console.log('认证成功!', {
+        sessionId: message.sessionId,
+        expiresIn: message.expiresIn,
+        permissions: message.permissions
+      });
+      
+      this.authState = 'authenticated';
+      this.sessionId = message.sessionId;
+      
+      // 计算会话过期时间
+      if (message.expiresIn) {
+        this.sessionExpiresAt = Date.now() + (message.expiresIn * 1000);
+        
+        // 设置会话刷新定时器（在过期前刷新）
+        const refreshBefore = (this.securityConfig.auth?.sessionRefreshBefore || 300) * 1000;
+        const refreshDelay = Math.max((message.expiresIn * 1000) - refreshBefore, 60000);
+        setTimeout(() => {
+          this.refreshSession();
+        }, refreshDelay);
+      }
+      
+      // 发送初始化消息（使用新版协议）
+      this.sendMessage({
+        type: 'init',
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      });
+      
+      // 立即发送一次标签页数据
+      this.sendTabsData();
+      
+    } else {
+      console.error('认证失败:', message.error);
+      this.authState = 'failed';
+      this.sessionId = null;
+      
+      // 记录重试时间
+      if (message.retryAfter) {
+        console.log(`服务器建议 ${message.retryAfter} 秒后重试`);
+      }
+      
+      // 关闭连接
+      if (this.ws) {
+        this.ws.close(4004, '认证失败');
+      }
+    }
+  }
+
+  /**
+   * 刷新会话（重新认证）
+   */
+  async refreshSession() {
+    if (this.authState !== 'authenticated' || !this.isConnected) {
+      return;
+    }
+    
+    console.log('会话即将过期，正在刷新...');
+    
+    // 重新连接以刷新会话
+    this.reconnectWithNewSettings();
+  }
+
+
+  /**
+   * 发送原始消息到服务器（不添加 sessionId，用于认证流程）
+   */
+  sendRawMessage(message) {
     if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
       return true;
@@ -193,6 +480,47 @@ class KaichiBrowserControl {
   }
 
   /**
+   * 发送消息到服务器
+   * 如果已认证，自动添加 sessionId
+   */
+  sendMessage(message) {
+    if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
+      // 如果已认证且有 sessionId，使用新协议格式
+      if (this.authState === 'authenticated' && this.sessionId) {
+        // 新协议格式：将原消息包装为 request
+        const wrappedMessage = {
+          type: 'request',
+          sessionId: this.sessionId,
+          requestId: message.requestId || this.generateRequestId(),
+          action: message.type,
+          payload: { ...message },
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+        // 移除 payload 中的冗余字段
+        delete wrappedMessage.payload.type;
+        delete wrappedMessage.payload.timestamp;
+        delete wrappedMessage.payload.requestId;
+        
+        this.ws.send(JSON.stringify(wrappedMessage));
+      } else {
+        // 旧协议格式或未认证时直接发送
+        this.ws.send(JSON.stringify(message));
+      }
+      return true;
+    } else {
+      console.warn('WebSocket未连接，无法发送消息:', message);
+      return false;
+    }
+  }
+
+  /**
+   * 生成唯一请求ID
+   */
+  generateRequestId() {
+    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
    * 处理来自服务器的消息
    */
   async handleMessage(data) {
@@ -200,41 +528,99 @@ class KaichiBrowserControl {
       const message = JSON.parse(data);
       console.log('收到服务器消息:', message.type, message);
       
+      // 优先处理认证相关消息
       switch (message.type) {
+        case 'auth_challenge':
+          await this.handleAuthChallenge(message);
+          return;
+          
+        case 'auth_result':
+          this.handleAuthResult(message);
+          return;
+          
+        case 'response':
+          // 处理新协议的响应消息
+          await this.handleServerResponse(message);
+          return;
+      }
+      
+      // 检查是否需要认证但未认证
+      if (this.authState === 'authenticating') {
+        console.warn('认证中，暂时忽略业务消息:', message.type);
+        return;
+      }
+      
+      // 处理业务消息
+      // 如果是新协议格式（包含 action 字段），提取实际操作
+      const actionType = message.action || message.type;
+      const payload = message.payload || message;
+      
+      switch (actionType) {
         case 'open_url':
-          await this.handleOpenUrl(message);
+          await this.handleOpenUrl(payload);
           break;
           
         case 'close_tab':
-          await this.handleCloseTab(message);
+          await this.handleCloseTab(payload);
           break;
           
         case 'get_html':
-          await this.handleGetHtml(message);
+          await this.handleGetHtml(payload);
           break;
           
         case 'execute_script':
-          await this.handleExecuteScript(message);
+          await this.handleExecuteScript(payload);
           break;
           
         case 'inject_css':
-          await this.handleInjectCss(message);
+          await this.handleInjectCss(payload);
           break;
           
         case 'get_cookies':
-          await this.handleGetCookies(message);
+          await this.handleGetCookies(payload);
           break;
           
         case 'upload_file_to_tab':
-          await this.handleUploadFileToTab(message);
+          await this.handleUploadFileToTab(payload);
           break;
           
         default:
-          console.warn('未知消息类型:', message.type);
+          console.warn('未知消息类型:', actionType);
           break;
       }
     } catch (error) {
       console.error('处理服务器消息时出错:', error);
+    }
+  }
+
+  /**
+   * 处理服务器响应消息（新协议）
+   */
+  async handleServerResponse(message) {
+    const { requestId, status, data, error } = message;
+    
+    if (status === 'error') {
+      console.error(`请求 ${requestId} 失败:`, error);
+      
+      // 检查是否是认证错误
+      if (error === 'AUTH_REQUIRED' || error === 'AUTH_FAILED') {
+        console.log('会话已过期，需要重新认证');
+        this.authState = 'disconnected';
+        this.sessionId = null;
+        // 重新连接以进行认证
+        this.reconnectWithNewSettings();
+      }
+    } else {
+      console.log(`请求 ${requestId} 成功:`, data);
+    }
+    
+    // 如果有待处理的请求回调，执行它
+    if (this.pendingRequests.has(requestId)) {
+      const callback = this.pendingRequests.get(requestId);
+      this.pendingRequests.delete(requestId);
+      if (callback) {
+        callback({ status, data, error });
+      }
     }
   }
 
@@ -1059,9 +1445,49 @@ class KaichiBrowserControl {
         sendResponse({
           isConnected: this.isConnected,
           serverUrl: this.serverUrl,
-          reconnectAttempts: this.reconnectAttempts
+          reconnectAttempts: this.reconnectAttempts,
+          // 新增认证状态
+          authState: this.authState,
+          hasAuthKey: !!this.authSecretKey,
+          sessionId: this.sessionId ? '***' : null, // 隐藏实际值
+          sessionExpiresAt: this.sessionExpiresAt
         });
         return true; // 保持消息通道开放
+      }
+      
+      // 获取认证状态
+      if (message.type === 'get_auth_status') {
+        sendResponse({
+          authState: this.authState,
+          hasAuthKey: !!this.authSecretKey,
+          isAuthenticated: this.authState === 'authenticated',
+          sessionExpiresAt: this.sessionExpiresAt
+        });
+        return true;
+      }
+      
+      // 保存认证密钥
+      if (message.type === 'save_auth_key') {
+        this.saveAuthKey(message.authKey)
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch(error => {
+            sendResponse({ success: false, error: error.message });
+          });
+        return true;
+      }
+      
+      // 清除认证密钥
+      if (message.type === 'clear_auth_key') {
+        this.clearAuthKey()
+          .then(() => {
+            sendResponse({ success: true });
+          })
+          .catch(error => {
+            sendResponse({ success: false, error: error.message });
+          });
+        return true;
       }
       if (message.type === 'send_tabs_data') {
         this.sendTabsData();
@@ -1460,6 +1886,12 @@ class KaichiBrowserControl {
   attemptReconnect() {
     // 如果已经在重连或未启用自动连接，则返回
     if (this.isReconnecting || !this.autoConnect) {
+      return;
+    }
+    
+    // 如果认证失败，不自动重连（需要用户检查密钥）
+    if (this.authState === 'failed') {
+      console.log('认证失败状态，跳过自动重连。请检查认证密钥配置。');
       return;
     }
     
