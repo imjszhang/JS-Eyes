@@ -1,5 +1,30 @@
 # Release Notes
 
+## v1.2.0
+
+### Changes
+- Updated to version 1.2.0
+
+### Downloads
+- [Chrome Extension](js-eyes-chrome-v1.2.0.zip)
+- [Firefox Extension](js-eyes-firefox-v1.2.0.xpi)
+
+### Installation Instructions
+
+#### Chrome/Edge
+1. Download `js-eyes-chrome-v1.2.0.zip`
+2. Extract the ZIP file
+3. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`)
+4. Enable "Developer mode" in the top right
+5. Click "Load unpacked"
+6. Select the extracted folder
+
+#### Firefox
+1. Download `js-eyes-firefox-v1.2.0.xpi`
+2. Open Firefox browser
+3. Drag and drop the `.xpi` file into the browser window
+4. Confirm installation
+
 ## v1.1.0
 
 ### Changes
