@@ -65,6 +65,44 @@
             <span id="auth-status" class="status-badge disconnected px-3 py-1 text-xs font-bold" data-i18n="statusNotConfigured">Not Configured</span>
           </div>
         </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="connectionMode">Connection Mode</div>
+          <div>
+            <span id="connection-mode" class="status-badge connected px-3 py-1 text-xs font-bold">WebSocket</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Service Health Status -->
+      <div class="brutal-card p-3 mt-3">
+        <div class="flex justify-between items-center py-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="serviceHealth">Service Health</div>
+          <div>
+            <span id="health-status" class="status-badge disconnected px-3 py-1 text-xs font-bold" data-i18n="statusUnknown">Unknown</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="pendingRequests">Pending Requests</div>
+          <div class="text-sm text-black font-mono font-bold">
+            <span id="pending-requests">0</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="rateLimitStatus">Rate Limit</div>
+          <div>
+            <span id="rate-limit-status" class="status-badge connected px-3 py-1 text-xs font-bold" data-i18n="statusNormal">Normal</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="circuitBreaker">Circuit Breaker</div>
+          <div>
+            <span id="circuit-breaker-status" class="status-badge connected px-3 py-1 text-xs font-bold" data-i18n="statusClosed">Closed</span>
+          </div>
+        </div>
       </div>
     </div>
 

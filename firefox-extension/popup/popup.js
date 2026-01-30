@@ -41,6 +41,9 @@ class JSEyesPopup {
     // 设置事件监听器
     this.setupEventListeners();
     
+    // 监听来自 background script 的状态更新
+    this.setupStatusListener();
+    
     // 加载设置
     this.loadSettings();
     
@@ -60,6 +63,27 @@ class JSEyesPopup {
     this.addLog(browser.i18n.getMessage('logPopupInit'));
     
     console.log('JS Eyes Popup 初始化完成');
+  }
+  
+  /**
+   * 设置状态更新监听器
+   */
+  setupStatusListener() {
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'STATUS_UPDATE' && message.data) {
+        this.updateExtendedStatus(message.data);
+        
+        // 同时更新连接状态
+        if (message.data.isConnected !== undefined) {
+          this.updateConnectionStatus({
+            isConnected: message.data.isConnected,
+            serverUrl: message.data.serverUrl,
+            authState: message.data.authState
+          });
+        }
+      }
+      return false; // 不需要异步响应
+    });
   }
 
   /**
@@ -303,6 +327,15 @@ class JSEyesPopup {
         this.updateConnectionStatus(response);
       }
       
+      // 获取扩展状态（包含健康检查等新信息）
+      const extendedStatus = await browser.runtime.sendMessage({
+        type: 'get_extended_status'
+      });
+      
+      if (extendedStatus) {
+        this.updateExtendedStatus(extendedStatus);
+      }
+      
       // 获取当前标签页信息
       await this.updateCurrentTabInfo();
       
@@ -312,6 +345,77 @@ class JSEyesPopup {
     } catch (error) {
       console.error('更新状态时出错:', error);
       this.addLog(browser.i18n.getMessage('logFailedUpdateStatus', error.message));
+    }
+  }
+  
+  /**
+   * 更新扩展状态（健康检查、限流、熔断等）
+   */
+  updateExtendedStatus(status) {
+    // 更新连接模式
+    const connectionModeElement = document.getElementById('connection-mode');
+    if (connectionModeElement && status.connectionMode) {
+      const modeText = status.connectionMode === 'websocket' ? 'WebSocket' : 'SSE';
+      connectionModeElement.textContent = modeText;
+      connectionModeElement.className = status.connectionMode === 'websocket' 
+        ? 'status-badge connected px-3 py-1 text-xs font-bold'
+        : 'status-badge connecting px-3 py-1 text-xs font-bold';
+    }
+    
+    // 更新健康状态
+    const healthStatusElement = document.getElementById('health-status');
+    if (healthStatusElement && status.healthCheck) {
+      const healthStatus = status.healthCheck.status || 'unknown';
+      let statusClass = 'disconnected';
+      let statusText = browser.i18n.getMessage('statusUnknown') || 'Unknown';
+      
+      switch (healthStatus) {
+        case 'healthy':
+          statusClass = 'connected';
+          statusText = browser.i18n.getMessage('statusHealthy') || 'Healthy';
+          break;
+        case 'warning':
+          statusClass = 'connecting';
+          statusText = browser.i18n.getMessage('statusWarning') || 'Warning';
+          break;
+        case 'critical':
+          statusClass = 'disconnected';
+          statusText = browser.i18n.getMessage('statusCritical') || 'Critical';
+          break;
+      }
+      
+      healthStatusElement.textContent = statusText;
+      healthStatusElement.className = `status-badge ${statusClass} px-3 py-1 text-xs font-bold`;
+    }
+    
+    // 更新待处理请求数
+    const pendingRequestsElement = document.getElementById('pending-requests');
+    if (pendingRequestsElement && status.queueStatus) {
+      pendingRequestsElement.textContent = status.queueStatus.size || 0;
+    }
+    
+    // 更新限流状态
+    const rateLimitElement = document.getElementById('rate-limit-status');
+    if (rateLimitElement && status.rateLimitStatus) {
+      const isBlocked = status.rateLimitStatus.isBlocked;
+      rateLimitElement.textContent = isBlocked 
+        ? (browser.i18n.getMessage('statusBlocked') || 'Blocked')
+        : (browser.i18n.getMessage('statusNormal') || 'Normal');
+      rateLimitElement.className = isBlocked
+        ? 'status-badge disconnected px-3 py-1 text-xs font-bold'
+        : 'status-badge connected px-3 py-1 text-xs font-bold';
+    }
+    
+    // 更新熔断状态
+    const circuitBreakerElement = document.getElementById('circuit-breaker-status');
+    if (circuitBreakerElement && status.healthCheck) {
+      const isOpen = status.healthCheck.isCircuitBreakerOpen;
+      circuitBreakerElement.textContent = isOpen
+        ? (browser.i18n.getMessage('statusOpen') || 'Open')
+        : (browser.i18n.getMessage('statusClosed') || 'Closed');
+      circuitBreakerElement.className = isOpen
+        ? 'status-badge disconnected px-3 py-1 text-xs font-bold'
+        : 'status-badge connected px-3 py-1 text-xs font-bold';
     }
   }
 

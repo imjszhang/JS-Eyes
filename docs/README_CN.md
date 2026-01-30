@@ -33,6 +33,10 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 - 🍪 **Cookie 管理** - 自动获取和同步页面 cookies
 - 💉 **代码注入** - 支持 JavaScript 执行和 CSS 注入
 - 📱 **状态监控** - 实时显示连接状态和扩展信息
+- 🏥 **健康检查与熔断** - 服务健康监控，自动熔断保护
+- 🔄 **SSE 降级** - WebSocket 连接失败时自动降级到 SSE
+- ⚡ **限流与去重** - 请求速率限制和去重，提升稳定性
+- 🔐 **HMAC 认证** - 使用 HMAC-SHA256 安全认证与服务器通信
 
 ## 支持的浏览器
 
@@ -48,8 +52,8 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 
 从 [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest) 下载最新版本：
 
-- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.2.0.zip`
-- **Firefox 扩展**: `js-eyes-firefox-v1.2.0.xpi`
+- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.3.0.zip`
+- **Firefox 扩展**: `js-eyes-firefox-v1.3.0.xpi`
 
 ### 从源代码安装
 

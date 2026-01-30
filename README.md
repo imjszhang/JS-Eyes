@@ -33,6 +33,10 @@ JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.
 - 🍪 **Cookie Management** - Auto-retrieve and sync page cookies
 - 💉 **Code Injection** - Support JavaScript execution and CSS injection
 - 📱 **Status Monitoring** - Real-time connection status and extension info
+- 🏥 **Health Check & Circuit Breaker** - Service health monitoring with automatic circuit breaker protection
+- 🔄 **SSE Fallback** - Auto-fallback to SSE when WebSocket connection fails
+- ⚡ **Rate Limiting & Deduplication** - Request rate limiting and deduplication for stability
+- 🔐 **HMAC Authentication** - Secure server communication with HMAC-SHA256 authentication
 
 ## Supported Browsers
 
@@ -48,8 +52,8 @@ JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.
 
 Download the latest release from [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest):
 
-- **Chrome/Edge Extension**: `js-eyes-chrome-v1.2.0.zip`
-- **Firefox Extension**: `js-eyes-firefox-v1.2.0.xpi`
+- **Chrome/Edge Extension**: `js-eyes-chrome-v1.3.0.zip`
+- **Firefox Extension**: `js-eyes-firefox-v1.3.0.xpi`
 
 ### Installation from Source
 

@@ -119,12 +119,14 @@ class RateLimiter {
 /**
  * 请求去重器
  * 防止重复请求被处理多次
+ * 
+ * 注意：去重窗口已与服务端 v2.0 对齐，默认为 5 秒
  */
 class RequestDeduplicator {
   /**
-   * @param {number} expirationMs - 请求记录过期时间（毫秒）
+   * @param {number} expirationMs - 请求记录过期时间（毫秒），默认 5000ms（与服务端对齐）
    */
-  constructor(expirationMs = 30000) {
+  constructor(expirationMs = 5000) {
     this.expirationMs = expirationMs;
     this.processingRequests = new Map(); // requestId -> { timestamp, promise }
     this.urlTabCache = new Map(); // url -> { tabId, timestamp }
@@ -388,13 +390,403 @@ class RequestQueueManager {
   }
 }
 
+/**
+ * 服务健康检查器
+ * 定期检查服务端健康状态，实现熔断保护
+ */
+class HealthChecker {
+  /**
+   * @param {Object} config - 配置对象
+   * @param {string} config.httpServerUrl - HTTP 服务器地址
+   * @param {string} config.endpoint - 健康检查端点
+   * @param {number} config.interval - 检查间隔（毫秒）
+   * @param {number} config.criticalCooldown - critical 状态冷却期（毫秒）
+   * @param {number} config.warningThrottle - warning 状态降速比例 (0-1)
+   * @param {number} config.timeout - 请求超时时间（毫秒）
+   */
+  constructor(config = {}) {
+    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.endpoint = config.endpoint || '/api/browser/health';
+    this.interval = config.interval || 30000;
+    this.criticalCooldown = config.criticalCooldown || 60000;
+    this.warningThrottle = config.warningThrottle || 0.5;
+    this.timeout = config.timeout || 5000;
+    
+    // 状态
+    this.currentStatus = 'unknown'; // unknown, healthy, warning, critical
+    this.lastCheck = null;
+    this.lastHealthData = null;
+    this.circuitBreakerUntil = 0; // 熔断恢复时间
+    this.checkTimer = null;
+    this.consecutiveFailures = 0;
+    this.maxConsecutiveFailures = 3;
+    
+    // 回调
+    this.onStatusChange = null;
+  }
+
+  /**
+   * 启动健康检查
+   */
+  start() {
+    if (this.checkTimer) {
+      return;
+    }
+    
+    console.log('[HealthChecker] 启动健康检查，间隔:', this.interval, 'ms');
+    
+    // 立即执行一次检查
+    this.check();
+    
+    // 设置定时检查
+    this.checkTimer = setInterval(() => {
+      this.check();
+    }, this.interval);
+  }
+
+  /**
+   * 停止健康检查
+   */
+  stop() {
+    if (this.checkTimer) {
+      clearInterval(this.checkTimer);
+      this.checkTimer = null;
+      console.log('[HealthChecker] 已停止健康检查');
+    }
+  }
+
+  /**
+   * 执行健康检查
+   * @returns {Promise<Object>} 健康状态数据
+   */
+  async check() {
+    const url = `${this.httpServerUrl}${this.endpoint}`;
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      this.consecutiveFailures = 0;
+      this.lastCheck = Date.now();
+      this.lastHealthData = data;
+      
+      const previousStatus = this.currentStatus;
+      this.currentStatus = data.status || 'unknown';
+      
+      // 根据状态处理熔断
+      if (this.currentStatus === 'critical') {
+        this.circuitBreakerUntil = Date.now() + this.criticalCooldown;
+        console.warn('[HealthChecker] 服务状态 critical，进入熔断状态');
+      } else if (this.currentStatus === 'healthy') {
+        this.circuitBreakerUntil = 0;
+      }
+      
+      // 触发状态变化回调
+      if (previousStatus !== this.currentStatus && this.onStatusChange) {
+        this.onStatusChange(this.currentStatus, previousStatus, data);
+      }
+      
+      console.log(`[HealthChecker] 健康检查完成: ${this.currentStatus}`, data);
+      return data;
+      
+    } catch (error) {
+      this.consecutiveFailures++;
+      this.lastCheck = Date.now();
+      
+      console.error(`[HealthChecker] 健康检查失败 (${this.consecutiveFailures}/${this.maxConsecutiveFailures}):`, error.message);
+      
+      // 连续失败超过阈值，进入熔断
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        const previousStatus = this.currentStatus;
+        this.currentStatus = 'critical';
+        this.circuitBreakerUntil = Date.now() + this.criticalCooldown;
+        
+        if (previousStatus !== 'critical' && this.onStatusChange) {
+          this.onStatusChange('critical', previousStatus, { error: error.message });
+        }
+      }
+      
+      return { status: 'error', error: error.message };
+    }
+  }
+
+  /**
+   * 检查是否允许发送请求（熔断检查）
+   * @returns {Object} { allowed: boolean, reason?: string, throttle?: number }
+   */
+  canSendRequest() {
+    const now = Date.now();
+    
+    // 检查熔断状态
+    if (now < this.circuitBreakerUntil) {
+      const retryAfter = Math.ceil((this.circuitBreakerUntil - now) / 1000);
+      return {
+        allowed: false,
+        reason: `服务熔断中，请在 ${retryAfter} 秒后重试`,
+        retryAfter
+      };
+    }
+    
+    // warning 状态返回降速建议
+    if (this.currentStatus === 'warning') {
+      return {
+        allowed: true,
+        throttle: this.warningThrottle,
+        reason: '服务负载较高，建议降低请求频率'
+      };
+    }
+    
+    return { allowed: true };
+  }
+
+  /**
+   * 获取当前状态
+   * @returns {Object} 状态信息
+   */
+  getStatus() {
+    const now = Date.now();
+    return {
+      status: this.currentStatus,
+      lastCheck: this.lastCheck,
+      lastCheckAgo: this.lastCheck ? now - this.lastCheck : null,
+      isCircuitBreakerOpen: now < this.circuitBreakerUntil,
+      circuitBreakerUntil: this.circuitBreakerUntil > now ? this.circuitBreakerUntil : null,
+      consecutiveFailures: this.consecutiveFailures,
+      healthData: this.lastHealthData
+    };
+  }
+
+  /**
+   * 手动重置熔断状态
+   */
+  resetCircuitBreaker() {
+    this.circuitBreakerUntil = 0;
+    this.consecutiveFailures = 0;
+    console.log('[HealthChecker] 熔断状态已重置');
+  }
+
+  /**
+   * 更新配置
+   * @param {Object} config - 新配置
+   */
+  updateConfig(config) {
+    if (config.httpServerUrl) this.httpServerUrl = config.httpServerUrl;
+    if (config.endpoint) this.endpoint = config.endpoint;
+    if (config.interval) {
+      this.interval = config.interval;
+      // 如果正在运行，重启以应用新间隔
+      if (this.checkTimer) {
+        this.stop();
+        this.start();
+      }
+    }
+    if (config.criticalCooldown) this.criticalCooldown = config.criticalCooldown;
+    if (config.warningThrottle) this.warningThrottle = config.warningThrottle;
+    if (config.timeout) this.timeout = config.timeout;
+    
+    console.log('[HealthChecker] 配置已更新');
+  }
+}
+
+/**
+ * SSE 客户端
+ * 用于接收服务端推送事件，作为 WebSocket 的降级方案
+ */
+class SSEClient {
+  /**
+   * @param {Object} config - 配置对象
+   * @param {string} config.httpServerUrl - HTTP 服务器地址
+   * @param {string} config.endpoint - SSE 端点
+   * @param {number} config.reconnectInterval - 重连间隔（毫秒）
+   * @param {number} config.maxReconnectAttempts - 最大重连次数
+   */
+  constructor(config = {}) {
+    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.endpoint = config.endpoint || '/api/browser/events';
+    this.reconnectInterval = config.reconnectInterval || 5000;
+    this.maxReconnectAttempts = config.maxReconnectAttempts || 10;
+    
+    this.eventSource = null;
+    this.isConnected = false;
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
+    this.currentRequestId = null;
+    
+    // 事件回调
+    this.onMessage = null;
+    this.onCallbackResult = null;
+    this.onRequestTimeout = null;
+    this.onError = null;
+    this.onConnect = null;
+    this.onDisconnect = null;
+  }
+
+  /**
+   * 连接到 SSE 端点
+   * @param {string} requestId - 可选，订阅特定请求的事件
+   */
+  connect(requestId = null) {
+    if (this.eventSource) {
+      this.disconnect();
+    }
+    
+    this.currentRequestId = requestId;
+    let url = `${this.httpServerUrl}${this.endpoint}`;
+    if (requestId) {
+      url += `?requestId=${encodeURIComponent(requestId)}`;
+    }
+    
+    console.log('[SSEClient] 连接到:', url);
+    
+    try {
+      this.eventSource = new EventSource(url);
+      
+      this.eventSource.onopen = () => {
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        console.log('[SSEClient] 连接已建立');
+        if (this.onConnect) {
+          this.onConnect();
+        }
+      };
+      
+      this.eventSource.onerror = (error) => {
+        console.error('[SSEClient] 连接错误:', error);
+        this.isConnected = false;
+        
+        if (this.onError) {
+          this.onError(error);
+        }
+        
+        // 尝试重连
+        this.scheduleReconnect();
+      };
+      
+      // 监听通用消息
+      this.eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[SSEClient] 收到消息:', data);
+          if (this.onMessage) {
+            this.onMessage(data);
+          }
+        } catch (e) {
+          console.error('[SSEClient] 解析消息失败:', e);
+        }
+      };
+      
+      // 监听回调结果事件
+      this.eventSource.addEventListener('callback_result', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[SSEClient] 收到回调结果:', data);
+          if (this.onCallbackResult) {
+            this.onCallbackResult(data);
+          }
+        } catch (e) {
+          console.error('[SSEClient] 解析回调结果失败:', e);
+        }
+      });
+      
+      // 监听请求超时事件
+      this.eventSource.addEventListener('request_timeout', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[SSEClient] 收到超时通知:', data);
+          if (this.onRequestTimeout) {
+            this.onRequestTimeout(data);
+          }
+        } catch (e) {
+          console.error('[SSEClient] 解析超时通知失败:', e);
+        }
+      });
+      
+    } catch (error) {
+      console.error('[SSEClient] 创建连接失败:', error);
+      this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * 断开连接
+   */
+  disconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    
+    this.isConnected = false;
+    this.currentRequestId = null;
+    
+    console.log('[SSEClient] 已断开连接');
+    if (this.onDisconnect) {
+      this.onDisconnect();
+    }
+  }
+
+  /**
+   * 安排重连
+   */
+  scheduleReconnect() {
+    if (this.reconnectTimer) {
+      return;
+    }
+    
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('[SSEClient] 达到最大重连次数，停止重连');
+      return;
+    }
+    
+    this.reconnectAttempts++;
+    const delay = this.reconnectInterval * Math.pow(1.5, this.reconnectAttempts - 1);
+    
+    console.log(`[SSEClient] 将在 ${delay}ms 后重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect(this.currentRequestId);
+    }, delay);
+  }
+
+  /**
+   * 获取连接状态
+   */
+  getStatus() {
+    return {
+      isConnected: this.isConnected,
+      reconnectAttempts: this.reconnectAttempts,
+      currentRequestId: this.currentRequestId
+    };
+  }
+}
+
 // 导出工具类和函数
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     withTimeout,
     RateLimiter,
     RequestDeduplicator,
-    RequestQueueManager
+    RequestQueueManager,
+    HealthChecker,
+    SSEClient
   };
 } else {
   // 浏览器环境，挂载到 window
@@ -402,6 +794,8 @@ if (typeof module !== 'undefined' && module.exports) {
     withTimeout,
     RateLimiter,
     RequestDeduplicator,
-    RequestQueueManager
+    RequestQueueManager,
+    HealthChecker,
+    SSEClient
   };
 }

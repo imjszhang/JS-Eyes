@@ -98,6 +98,12 @@ class KaichiBrowserControl {
       // 超时包装器函数
       this.withTimeout = Utils.withTimeout;
       
+      // 健康检查器
+      this.initHealthChecker(Utils);
+      
+      // SSE 客户端（作为 WebSocket 降级方案）
+      this.initSSEClient(Utils);
+      
       console.log('[KaichiBrowserControl] 稳定性工具已初始化');
     } else {
       console.warn('[KaichiBrowserControl] ExtensionUtils 未加载，使用降级模式');
@@ -106,6 +112,8 @@ class KaichiBrowserControl {
       this.rateLimiter = null;
       this.deduplicator = null;
       this.queueManager = null;
+      this.healthChecker = null;
+      this.sseClient = null;
       this.withTimeout = async (promise, ms, errorMessage) => {
         // 简单的超时实现
         let timeoutId;
@@ -122,6 +130,199 @@ class KaichiBrowserControl {
     
     // 启动定期清理任务
     this.startCleanupTask();
+  }
+  
+  /**
+   * 初始化健康检查器
+   * @param {Object} Utils - 工具类对象
+   */
+  initHealthChecker(Utils) {
+    if (!Utils || !Utils.HealthChecker) {
+      console.warn('[KaichiBrowserControl] HealthChecker 类不可用');
+      this.healthChecker = null;
+      return;
+    }
+    
+    // 获取健康检查配置
+    const healthConfig = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.HEALTH_CHECK)
+      ? EXTENSION_CONFIG.HEALTH_CHECK
+      : { enabled: true, interval: 30000, endpoint: '/api/browser/health' };
+    
+    if (!healthConfig.enabled) {
+      console.log('[KaichiBrowserControl] 健康检查已禁用');
+      this.healthChecker = null;
+      return;
+    }
+    
+    // 获取 HTTP 服务器地址
+    const httpServerUrl = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.HTTP_SERVER_URL)
+      ? EXTENSION_CONFIG.HTTP_SERVER_URL
+      : 'http://localhost:3333';
+    
+    // 创建健康检查器实例
+    this.healthChecker = new Utils.HealthChecker({
+      httpServerUrl: httpServerUrl,
+      endpoint: healthConfig.endpoint || '/api/browser/health',
+      interval: healthConfig.interval || 30000,
+      timeout: healthConfig.timeout || 5000,
+      criticalCooldown: healthConfig.circuitBreaker?.criticalCooldown || 60000,
+      warningThrottle: healthConfig.circuitBreaker?.warningThrottle || 0.5
+    });
+    
+    // 设置状态变化回调
+    this.healthChecker.onStatusChange = (newStatus, oldStatus, data) => {
+      console.log(`[HealthChecker] 服务状态变化: ${oldStatus} -> ${newStatus}`, data);
+      
+      // 通知 Popup 状态变化
+      this.broadcastStatusUpdate();
+      
+      // 如果状态恢复为 healthy，尝试重新连接 WebSocket
+      if (newStatus === 'healthy' && oldStatus === 'critical' && !this.isConnected) {
+        console.log('[HealthChecker] 服务恢复，尝试重新连接 WebSocket');
+        this.connect();
+      }
+    };
+    
+    console.log('[KaichiBrowserControl] 健康检查器已初始化');
+  }
+  
+  /**
+   * 初始化 SSE 客户端
+   * @param {Object} Utils - 工具类对象
+   */
+  initSSEClient(Utils) {
+    if (!Utils || !Utils.SSEClient) {
+      console.warn('[KaichiBrowserControl] SSEClient 类不可用');
+      this.sseClient = null;
+      return;
+    }
+    
+    // 获取 SSE 配置
+    const sseConfig = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.SSE)
+      ? EXTENSION_CONFIG.SSE
+      : { enabled: true, endpoint: '/api/browser/events' };
+    
+    if (!sseConfig.enabled) {
+      console.log('[KaichiBrowserControl] SSE 已禁用');
+      this.sseClient = null;
+      return;
+    }
+    
+    // 获取 HTTP 服务器地址
+    const httpServerUrl = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.HTTP_SERVER_URL)
+      ? EXTENSION_CONFIG.HTTP_SERVER_URL
+      : 'http://localhost:3333';
+    
+    // WebSocket 失败多少次后降级到 SSE
+    this.sseFallbackThreshold = sseConfig.fallbackAfterWsFailures || 5;
+    this.wsConsecutiveFailures = 0;
+    this.connectionMode = 'websocket'; // websocket | sse
+    
+    // 创建 SSE 客户端实例
+    this.sseClient = new Utils.SSEClient({
+      httpServerUrl: httpServerUrl,
+      endpoint: sseConfig.endpoint || '/api/browser/events',
+      reconnectInterval: sseConfig.reconnectInterval || 5000,
+      maxReconnectAttempts: sseConfig.maxReconnectAttempts || 10
+    });
+    
+    // 设置回调
+    this.sseClient.onCallbackResult = (data) => {
+      // 处理通过 SSE 接收到的回调结果
+      this.handleServerResponse({
+        type: 'callback_result',
+        requestId: data.requestId,
+        status: 'completed',
+        data: data.result
+      });
+    };
+    
+    this.sseClient.onRequestTimeout = (data) => {
+      // 处理请求超时通知
+      this.handleServerResponse({
+        type: 'request_timeout',
+        requestId: data.requestId,
+        status: 'timeout',
+        error: '服务端请求超时'
+      });
+    };
+    
+    this.sseClient.onConnect = () => {
+      console.log('[KaichiBrowserControl] SSE 连接成功（降级模式）');
+      this.broadcastStatusUpdate();
+    };
+    
+    this.sseClient.onDisconnect = () => {
+      console.log('[KaichiBrowserControl] SSE 连接断开');
+      this.broadcastStatusUpdate();
+    };
+    
+    console.log('[KaichiBrowserControl] SSE 客户端已初始化');
+  }
+  
+  /**
+   * 广播状态更新到 Popup
+   */
+  broadcastStatusUpdate() {
+    try {
+      browser.runtime.sendMessage({
+        type: 'STATUS_UPDATE',
+        data: this.getExtendedStatus()
+      }).catch(() => {
+        // Popup 可能未打开，忽略错误
+      });
+    } catch (e) {
+      // 忽略
+    }
+  }
+  
+  /**
+   * 获取扩展状态（包含健康检查等新信息）
+   */
+  getExtendedStatus() {
+    return {
+      // 连接状态
+      isConnected: this.isConnected,
+      connectionMode: this.connectionMode || 'websocket',
+      serverUrl: this.serverUrl,
+      authState: this.authState,
+      
+      // 健康检查状态
+      healthCheck: this.healthChecker ? this.healthChecker.getStatus() : null,
+      
+      // SSE 状态
+      sseStatus: this.sseClient ? this.sseClient.getStatus() : null,
+      
+      // 队列状态
+      queueStatus: this.queueManager ? this.queueManager.getStatus() : null,
+      
+      // 限流状态
+      rateLimitStatus: this.rateLimiter ? this.rateLimiter.getStatus() : null
+    };
+  }
+  
+  /**
+   * 检查是否可以发送请求（综合熔断和限流检查）
+   * @returns {Object} { allowed: boolean, reason?: string }
+   */
+  canSendRequest() {
+    // 健康检查熔断
+    if (this.healthChecker) {
+      const healthCheck = this.healthChecker.canSendRequest();
+      if (!healthCheck.allowed) {
+        return healthCheck;
+      }
+    }
+    
+    // 本地限流检查
+    if (this.rateLimiter) {
+      const rateCheck = this.rateLimiter.check();
+      if (!rateCheck.allowed) {
+        return rateCheck;
+      }
+    }
+    
+    return { allowed: true };
   }
 
   /**
@@ -327,12 +528,28 @@ class KaichiBrowserControl {
         this.reconnectAttempts = 0;
         this.isReconnecting = false;
         this.authState = 'authenticating';
+        this.connectionMode = 'websocket';
+        this.wsConsecutiveFailures = 0; // 重置连续失败计数
         
         // 清除重连定时器
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
         }
+        
+        // 启动健康检查
+        if (this.healthChecker) {
+          this.healthChecker.start();
+        }
+        
+        // 如果之前使用 SSE 降级模式，断开 SSE
+        if (this.sseClient && this.sseClient.isConnected) {
+          console.log('[KaichiBrowserControl] WebSocket 恢复，断开 SSE 降级连接');
+          this.sseClient.disconnect();
+        }
+        
+        // 广播状态更新
+        this.broadcastStatusUpdate();
         
         // 设置认证超时（如果服务器不发送 challenge，可能是旧版服务器）
         const authTimeout = this.securityConfig.auth?.authTimeout || 10000;
@@ -392,6 +609,15 @@ class KaichiBrowserControl {
       this.ws.onerror = (error) => {
         console.error('WebSocket错误:', error);
         this.isConnected = false;
+        this.wsConsecutiveFailures = (this.wsConsecutiveFailures || 0) + 1;
+        
+        console.log(`[WebSocket] 连续失败次数: ${this.wsConsecutiveFailures}/${this.sseFallbackThreshold || 5}`);
+        
+        // 检查是否需要降级到 SSE
+        if (this.shouldFallbackToSSE()) {
+          this.fallbackToSSE();
+          return;
+        }
         
         // 如果启用自动连接，则尝试重连
         if (this.autoConnect && !this.isReconnecting) {
@@ -522,6 +748,9 @@ class KaichiBrowserControl {
       // 立即发送一次标签页数据
       this.sendTabsData();
       
+      // 从服务端同步配置
+      this.syncServerConfig();
+      
     } else {
       console.error('认证失败:', message.error);
       this.authState = 'failed';
@@ -537,6 +766,105 @@ class KaichiBrowserControl {
         this.ws.close(4004, '认证失败');
       }
     }
+  }
+
+  /**
+   * 从服务端同步配置
+   * 获取服务端的超时、限流等配置，更新本地设置
+   */
+  async syncServerConfig() {
+    try {
+      // 获取 HTTP 服务器地址
+      const httpServerUrl = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.HTTP_SERVER_URL)
+        ? EXTENSION_CONFIG.HTTP_SERVER_URL
+        : 'http://localhost:3333';
+      
+      const configUrl = `${httpServerUrl}/api/browser/config`;
+      
+      console.log('[ConfigSync] 正在从服务端获取配置...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(configUrl, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        // 服务端可能不支持配置端点（旧版本），使用默认配置
+        console.log('[ConfigSync] 服务端未返回配置（可能是旧版本），使用默认配置');
+        return;
+      }
+      
+      const serverConfig = await response.json();
+      console.log('[ConfigSync] 获取到服务端配置:', serverConfig);
+      
+      // 应用服务端配置
+      this.applyServerConfig(serverConfig);
+      
+    } catch (error) {
+      // 配置同步失败不影响正常功能
+      console.warn('[ConfigSync] 配置同步失败（使用默认配置）:', error.message);
+    }
+  }
+  
+  /**
+   * 应用服务端配置到本地
+   * @param {Object} serverConfig - 服务端配置
+   */
+  applyServerConfig(serverConfig) {
+    // 同步超时配置
+    if (serverConfig.request?.defaultTimeout) {
+      const newTimeout = serverConfig.request.defaultTimeout;
+      this.securityConfig.requestTimeout = newTimeout;
+      
+      // 更新队列管理器的超时设置
+      if (this.queueManager) {
+        this.queueManager.requestTimeoutMs = newTimeout;
+      }
+      
+      // 更新去重器的过期时间
+      if (this.deduplicator) {
+        this.deduplicator.expirationMs = newTimeout;
+      }
+      
+      console.log(`[ConfigSync] 请求超时已更新: ${newTimeout}ms`);
+    }
+    
+    // 同步限流配置
+    if (serverConfig.rateLimit) {
+      const rateConfig = serverConfig.rateLimit;
+      
+      // 更新本地限流器
+      if (this.rateLimiter && rateConfig.callbackQueryLimit) {
+        // 转换为每秒限制（服务端是每分钟）
+        const perSecond = Math.ceil(rateConfig.callbackQueryLimit / 60);
+        this.rateLimiter.maxRequests = perSecond;
+        console.log(`[ConfigSync] 限流已更新: ${perSecond} 次/秒`);
+      }
+    }
+    
+    // 同步资源监控阈值
+    if (serverConfig.resourceMonitor && this.healthChecker) {
+      const monitorConfig = serverConfig.resourceMonitor;
+      
+      if (monitorConfig.warningThreshold) {
+        this.healthChecker.warningThrottle = monitorConfig.warningThreshold;
+      }
+      
+      console.log('[ConfigSync] 资源监控配置已更新');
+    }
+    
+    // 保存同步的配置供参考
+    this.serverConfig = serverConfig;
+    
+    console.log('[ConfigSync] 服务端配置同步完成');
+    
+    // 广播状态更新
+    this.broadcastStatusUpdate();
   }
 
   /**
@@ -724,6 +1052,14 @@ class KaichiBrowserControl {
           await this.handleUploadFileToTab(payload);
           break;
           
+        case 'subscribe_events':
+          await this.handleSubscribeEvents(payload);
+          break;
+          
+        case 'unsubscribe_events':
+          await this.handleUnsubscribeEvents(payload);
+          break;
+          
         default:
           console.warn('未知消息类型:', actionType);
           // 清理队列和去重标记
@@ -742,23 +1078,104 @@ class KaichiBrowserControl {
 
   /**
    * 处理服务器响应消息（新协议）
+   * 支持服务端 v2.0 新增的状态：
+   * - pending: 请求已注册，等待处理
+   * - processing: 请求正在处理中
+   * - completed: 请求成功完成
+   * - timeout: 请求超时（服务端 60 秒超时）
+   * - error: 请求发生错误
+   * - rate_limited: 触发服务端限流
    */
   async handleServerResponse(message) {
-    const { requestId, status, data, error } = message;
+    const { requestId, status, data, error, retryAfter, deduplicated, existingRequestId } = message;
     
-    if (status === 'error') {
-      console.error(`请求 ${requestId} 失败:`, error);
-      
-      // 检查是否是认证错误
-      if (error === 'AUTH_REQUIRED' || error === 'AUTH_FAILED') {
-        console.log('会话已过期，需要重新认证');
-        this.authState = 'disconnected';
-        this.sessionId = null;
-        // 重新连接以进行认证
-        this.reconnectWithNewSettings();
+    // 处理请求去重响应
+    if (deduplicated && existingRequestId) {
+      console.log(`[ServerResponse] 请求 ${requestId} 被去重，使用已有请求 ${existingRequestId}`);
+      // 如果有待处理的回调，更新为使用已有请求的 ID
+      if (this.pendingRequests.has(requestId)) {
+        const callback = this.pendingRequests.get(requestId);
+        this.pendingRequests.delete(requestId);
+        // 将回调转移到已有请求
+        if (!this.pendingRequests.has(existingRequestId)) {
+          this.pendingRequests.set(existingRequestId, callback);
+        }
       }
-    } else {
-      console.log(`请求 ${requestId} 成功:`, data);
+      return;
+    }
+    
+    // 根据状态处理
+    switch (status) {
+      case 'pending':
+        // 请求已注册，等待处理 - 无需特殊处理
+        console.log(`[ServerResponse] 请求 ${requestId} 已注册，等待处理`);
+        break;
+        
+      case 'processing':
+        // 请求正在处理中 - 更新本地状态
+        console.log(`[ServerResponse] 请求 ${requestId} 正在处理中`);
+        break;
+        
+      case 'completed':
+        // 请求成功完成
+        console.log(`[ServerResponse] 请求 ${requestId} 成功完成:`, data);
+        this.resolveRequest(requestId, { status, data });
+        break;
+        
+      case 'timeout':
+        // 服务端超时
+        console.warn(`[ServerResponse] 请求 ${requestId} 服务端超时`);
+        this.resolveRequest(requestId, { 
+          status: 'timeout', 
+          error: error || '服务端请求超时（60秒）'
+        });
+        break;
+        
+      case 'rate_limited':
+        // 触发服务端限流
+        console.warn(`[ServerResponse] 请求 ${requestId} 触发服务端限流，${retryAfter} 秒后重试`);
+        this.handleServerRateLimit(retryAfter);
+        this.resolveRequest(requestId, { 
+          status: 'rate_limited', 
+          error: `服务端限流，请 ${retryAfter} 秒后重试`,
+          retryAfter 
+        });
+        break;
+        
+      case 'error':
+        console.error(`[ServerResponse] 请求 ${requestId} 失败:`, error);
+        
+        // 检查是否是认证错误
+        if (error === 'AUTH_REQUIRED' || error === 'AUTH_FAILED') {
+          console.log('会话已过期，需要重新认证');
+          this.authState = 'disconnected';
+          this.sessionId = null;
+          // 重新连接以进行认证
+          this.reconnectWithNewSettings();
+        }
+        
+        this.resolveRequest(requestId, { status: 'error', error });
+        break;
+        
+      default:
+        // 未知状态，按旧协议处理
+        console.log(`[ServerResponse] 请求 ${requestId} 状态: ${status}`, data);
+        this.resolveRequest(requestId, { status, data, error });
+    }
+  }
+  
+  /**
+   * 解析请求并执行回调
+   * @param {string} requestId - 请求 ID
+   * @param {Object} result - 结果对象
+   */
+  resolveRequest(requestId, result) {
+    // 清理队列和去重标记
+    if (this.queueManager && requestId) {
+      this.queueManager.remove(requestId);
+    }
+    if (this.deduplicator && requestId) {
+      this.deduplicator.markCompleted(requestId);
     }
     
     // 如果有待处理的请求回调，执行它
@@ -766,9 +1183,27 @@ class KaichiBrowserControl {
       const callback = this.pendingRequests.get(requestId);
       this.pendingRequests.delete(requestId);
       if (callback) {
-        callback({ status, data, error });
+        callback(result);
       }
     }
+  }
+  
+  /**
+   * 处理服务端限流信号
+   * @param {number} retryAfter - 重试等待秒数
+   */
+  handleServerRateLimit(retryAfter) {
+    const waitMs = (retryAfter || 5) * 1000;
+    
+    // 暂时阻止本地发送请求
+    if (this.rateLimiter) {
+      // 设置本地限流器的阻止状态
+      this.rateLimiter.blockedUntil = Date.now() + waitMs;
+      console.log(`[RateLimit] 服务端限流，本地限流器已同步，${retryAfter} 秒后解除`);
+    }
+    
+    // 广播状态更新
+    this.broadcastStatusUpdate();
   }
 
   /**
@@ -1574,6 +2009,98 @@ class KaichiBrowserControl {
   }
 
   /**
+   * 处理事件订阅请求
+   * 支持服务器端的事件订阅机制
+   */
+  async handleSubscribeEvents(message) {
+    try {
+      const { events = [], requestId } = message;
+      
+      // 初始化事件订阅存储
+      if (!this.subscribedEvents) {
+        this.subscribedEvents = new Set();
+      }
+      
+      // 添加订阅的事件类型
+      events.forEach(eventType => {
+        this.subscribedEvents.add(eventType);
+        console.log(`[SubscribeEvents] 已订阅事件: ${eventType}`);
+      });
+      
+      // 发送订阅成功响应
+      this.sendMessage({
+        type: 'subscribe_events_response',
+        requestId: requestId,
+        status: 'success',
+        subscribedEvents: Array.from(this.subscribedEvents),
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('处理事件订阅请求时出错:', error);
+      this.sendMessage({
+        type: 'error',
+        message: error.message,
+        requestId: message.requestId
+      });
+    } finally {
+      // 从队列中移除请求
+      if (this.queueManager && message.requestId) {
+        this.queueManager.remove(message.requestId);
+      }
+      if (this.deduplicator && message.requestId) {
+        this.deduplicator.markCompleted(message.requestId);
+      }
+    }
+  }
+
+  /**
+   * 处理取消事件订阅请求
+   */
+  async handleUnsubscribeEvents(message) {
+    try {
+      const { events = [], requestId } = message;
+      
+      // 如果没有订阅存储，初始化
+      if (!this.subscribedEvents) {
+        this.subscribedEvents = new Set();
+      }
+      
+      // 移除订阅的事件类型
+      events.forEach(eventType => {
+        this.subscribedEvents.delete(eventType);
+        console.log(`[UnsubscribeEvents] 已取消订阅事件: ${eventType}`);
+      });
+      
+      // 发送取消订阅成功响应
+      this.sendMessage({
+        type: 'unsubscribe_events_response',
+        requestId: requestId,
+        status: 'success',
+        unsubscribedEvents: events,
+        remainingSubscriptions: Array.from(this.subscribedEvents),
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('处理取消事件订阅请求时出错:', error);
+      this.sendMessage({
+        type: 'error',
+        message: error.message,
+        requestId: message.requestId
+      });
+    } finally {
+      // 从队列中移除请求
+      if (this.queueManager && message.requestId) {
+        this.queueManager.remove(message.requestId);
+      }
+      if (this.deduplicator && message.requestId) {
+        this.deduplicator.markCompleted(message.requestId);
+      }
+    }
+  }
+
+  /**
    * 等待标签页加载完成
    */
   async waitForTabLoad(tabId, timeout = 30000) {
@@ -1690,6 +2217,12 @@ class KaichiBrowserControl {
           isAuthenticated: this.authState === 'authenticated',
           sessionExpiresAt: this.sessionExpiresAt
         });
+        return true;
+      }
+      
+      // 获取扩展状态（包含健康检查、限流等新信息）
+      if (message.type === 'get_extended_status') {
+        sendResponse(this.getExtendedStatus());
         return true;
       }
       
@@ -2165,6 +2698,99 @@ class KaichiBrowserControl {
     }
     this.isReconnecting = false;
     console.log('已停止自动重连');
+  }
+  
+  /**
+   * 检查是否应该降级到 SSE
+   * @returns {boolean}
+   */
+  shouldFallbackToSSE() {
+    // 如果 SSE 客户端不可用或已禁用，不降级
+    if (!this.sseClient) {
+      return false;
+    }
+    
+    // 如果已经在 SSE 模式，不需要再降级
+    if (this.connectionMode === 'sse') {
+      return false;
+    }
+    
+    // 连续失败次数达到阈值
+    const threshold = this.sseFallbackThreshold || 5;
+    return (this.wsConsecutiveFailures || 0) >= threshold;
+  }
+  
+  /**
+   * 降级到 SSE 模式
+   */
+  fallbackToSSE() {
+    console.log('[KaichiBrowserControl] WebSocket 连续失败，降级到 SSE 模式');
+    
+    // 停止 WebSocket 重连
+    this.stopAutoReconnect();
+    
+    // 切换到 SSE 模式
+    this.connectionMode = 'sse';
+    
+    // 连接 SSE
+    if (this.sseClient) {
+      this.sseClient.connect();
+    }
+    
+    // 启动健康检查（如果还没启动）
+    if (this.healthChecker && !this.healthChecker.checkTimer) {
+      this.healthChecker.start();
+    }
+    
+    // 广播状态更新
+    this.broadcastStatusUpdate();
+    
+    // 定期尝试恢复 WebSocket 连接
+    this.scheduleWSRecovery();
+  }
+  
+  /**
+   * 安排 WebSocket 恢复尝试
+   */
+  scheduleWSRecovery() {
+    // 每 60 秒尝试恢复 WebSocket
+    const recoveryInterval = 60000;
+    
+    if (this.wsRecoveryTimer) {
+      clearInterval(this.wsRecoveryTimer);
+    }
+    
+    this.wsRecoveryTimer = setInterval(() => {
+      if (this.connectionMode === 'sse' && !this.isConnected) {
+        console.log('[KaichiBrowserControl] 尝试恢复 WebSocket 连接...');
+        this.wsConsecutiveFailures = 0; // 重置失败计数
+        this.connectionMode = 'websocket';
+        this.connect();
+      } else if (this.isConnected && this.connectionMode === 'websocket') {
+        // WebSocket 已恢复，停止恢复尝试
+        clearInterval(this.wsRecoveryTimer);
+        this.wsRecoveryTimer = null;
+      }
+    }, recoveryInterval);
+  }
+  
+  /**
+   * 停止 SSE 降级模式，恢复 WebSocket
+   */
+  stopSSEFallback() {
+    if (this.wsRecoveryTimer) {
+      clearInterval(this.wsRecoveryTimer);
+      this.wsRecoveryTimer = null;
+    }
+    
+    if (this.sseClient) {
+      this.sseClient.disconnect();
+    }
+    
+    this.connectionMode = 'websocket';
+    this.wsConsecutiveFailures = 0;
+    
+    console.log('[KaichiBrowserControl] 已停止 SSE 降级模式');
   }
 
   /**
