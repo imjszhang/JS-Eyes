@@ -45,6 +45,10 @@ class KaichiBrowserControl {
           ],
           sensitiveActions: ['execute_script', 'get_cookies'],
           requestTimeout: 30000,
+          rateLimit: {
+            maxRequestsPerSecond: 10,
+            blockDuration: 5000
+          },
           auth: {
             storageKey: 'auth_secret_key',
             authTimeout: 10000,
@@ -60,8 +64,92 @@ class KaichiBrowserControl {
     this.sessionExpiresAt = null;    // 会话过期时间
     this.authTimeout = null;         // 认证超时定时器
     
+    // 稳定性相关工具（从 utils.js 加载）
+    this.initStabilityTools();
+    
     // 初始化
     this.init();
+  }
+
+  /**
+   * 初始化稳定性相关工具
+   * 包括速率限制器、请求去重器、请求队列管理器
+   */
+  initStabilityTools() {
+    // 获取工具类（从 window.ExtensionUtils）
+    const Utils = typeof ExtensionUtils !== 'undefined' ? ExtensionUtils : null;
+    
+    if (Utils) {
+      // 速率限制器
+      const rateLimitConfig = this.securityConfig.rateLimit || {};
+      this.rateLimiter = new Utils.RateLimiter(
+        rateLimitConfig.maxRequestsPerSecond || 10,
+        1000,
+        rateLimitConfig.blockDuration || 5000
+      );
+      
+      // 请求去重器
+      const requestTimeout = this.securityConfig.requestTimeout || 30000;
+      this.deduplicator = new Utils.RequestDeduplicator(requestTimeout);
+      
+      // 请求队列管理器
+      this.queueManager = new Utils.RequestQueueManager(100, requestTimeout);
+      
+      // 超时包装器函数
+      this.withTimeout = Utils.withTimeout;
+      
+      console.log('[KaichiBrowserControl] 稳定性工具已初始化');
+    } else {
+      console.warn('[KaichiBrowserControl] ExtensionUtils 未加载，使用降级模式');
+      
+      // 降级模式：提供基本功能
+      this.rateLimiter = null;
+      this.deduplicator = null;
+      this.queueManager = null;
+      this.withTimeout = async (promise, ms, errorMessage) => {
+        // 简单的超时实现
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(errorMessage || '操作超时')), ms);
+        });
+        try {
+          return await Promise.race([promise, timeoutPromise]);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+    }
+    
+    // 启动定期清理任务
+    this.startCleanupTask();
+  }
+
+  /**
+   * 启动定期清理任务
+   * 每 10 秒清理过期请求和缓存
+   */
+  startCleanupTask() {
+    setInterval(() => {
+      try {
+        if (this.deduplicator) {
+          this.deduplicator.cleanup();
+        }
+        if (this.queueManager) {
+          const expiredRequests = this.queueManager.cleanupExpired();
+          // 为过期的请求发送超时响应
+          for (const expired of expiredRequests) {
+            this.sendMessage({
+              type: 'error',
+              message: `请求超时: ${expired.type}`,
+              requestId: expired.requestId,
+              code: 'TIMEOUT'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[CleanupTask] 清理任务出错:', error);
+      }
+    }, 10000); // 每 10 秒执行一次
   }
 
   /**
@@ -522,13 +610,14 @@ class KaichiBrowserControl {
 
   /**
    * 处理来自服务器的消息
+   * 包含速率限制、请求去重、队列管理
    */
   async handleMessage(data) {
     try {
       const message = JSON.parse(data);
       console.log('收到服务器消息:', message.type, message);
       
-      // 优先处理认证相关消息
+      // 优先处理认证相关消息（不受限制）
       switch (message.type) {
         case 'auth_challenge':
           await this.handleAuthChallenge(message);
@@ -550,11 +639,62 @@ class KaichiBrowserControl {
         return;
       }
       
-      // 处理业务消息
-      // 如果是新协议格式（包含 action 字段），提取实际操作
+      // 提取请求信息
       const actionType = message.action || message.type;
       const payload = message.payload || message;
+      const requestId = payload.requestId || message.requestId;
       
+      // === 保护层检查 ===
+      
+      // 1. 速率限制检查
+      if (this.rateLimiter) {
+        const rateLimitResult = this.rateLimiter.check();
+        if (!rateLimitResult.allowed) {
+          console.warn(`[RateLimit] 请求被限制: ${actionType}`, rateLimitResult.reason);
+          this.sendMessage({
+            type: 'error',
+            message: rateLimitResult.reason,
+            requestId: requestId,
+            code: 'RATE_LIMITED',
+            retryAfter: rateLimitResult.retryAfter
+          });
+          return;
+        }
+      }
+      
+      // 2. 请求去重检查
+      if (this.deduplicator && requestId) {
+        const dedupResult = this.deduplicator.checkRequest(requestId);
+        if (dedupResult.isDuplicate) {
+          console.warn(`[Dedup] 重复请求被跳过: ${requestId}`);
+          // 不发送响应，等待原请求完成
+          return;
+        }
+        // 标记请求开始处理
+        this.deduplicator.markProcessing(requestId);
+      }
+      
+      // 3. 队列容量检查
+      if (this.queueManager && requestId) {
+        const queueResult = this.queueManager.add(requestId, actionType, { tabId: payload.tabId });
+        if (!queueResult.accepted) {
+          console.warn(`[Queue] 队列已满，请求被拒绝: ${requestId}`);
+          this.sendMessage({
+            type: 'error',
+            message: queueResult.reason,
+            requestId: requestId,
+            code: 'QUEUE_FULL',
+            queueSize: queueResult.queueSize
+          });
+          // 移除去重标记
+          if (this.deduplicator) {
+            this.deduplicator.markCompleted(requestId);
+          }
+          return;
+        }
+      }
+      
+      // === 处理业务消息 ===
       switch (actionType) {
         case 'open_url':
           await this.handleOpenUrl(payload);
@@ -586,6 +726,13 @@ class KaichiBrowserControl {
           
         default:
           console.warn('未知消息类型:', actionType);
+          // 清理队列和去重标记
+          if (this.queueManager && requestId) {
+            this.queueManager.remove(requestId);
+          }
+          if (this.deduplicator && requestId) {
+            this.deduplicator.markCompleted(requestId);
+          }
           break;
       }
     } catch (error) {
@@ -626,33 +773,74 @@ class KaichiBrowserControl {
 
   /**
    * 处理打开URL请求
+   * 带超时保护和标签页去重
    */
   async handleOpenUrl(message) {
+    const { url, tabId, windowId, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { url, tabId, windowId, requestId } = message;
-      
       let resultTabId;
+      let isExistingTab = false;
       
-      if (tabId) {
-        // 更新现有标签页
-        await browser.tabs.update(parseInt(tabId), { url: url });
-        resultTabId = tabId;
-      } else {
-        // 创建新标签页
-        const createProperties = { url: url };
-        if (windowId) {
-          createProperties.windowId = parseInt(windowId);
+      // 如果没有指定 tabId，检查是否已有相同 URL 的标签页（去重）
+      if (!tabId && this.deduplicator) {
+        const existingCheck = this.deduplicator.checkUrlTab(url);
+        if (existingCheck.hasExisting) {
+          // 验证标签页是否仍然存在
+          try {
+            const existingTab = await browser.tabs.get(existingCheck.tabId);
+            if (existingTab && existingTab.url === url) {
+              console.log(`[OpenUrl] 使用已存在的标签页 ${existingCheck.tabId} (URL: ${url})`);
+              resultTabId = existingCheck.tabId;
+              isExistingTab = true;
+            }
+          } catch (e) {
+            // 标签页不存在，继续创建新的
+          }
         }
-        
-        const tab = await browser.tabs.create(createProperties);
-        resultTabId = tab.id;
       }
       
-      // 等待页面加载完成
-      await this.waitForTabLoad(resultTabId);
+      if (!resultTabId) {
+        if (tabId) {
+          // 更新现有标签页
+          await browser.tabs.update(parseInt(tabId), { url: url });
+          resultTabId = tabId;
+        } else {
+          // 创建新标签页
+          const createProperties = { url: url };
+          if (windowId) {
+            createProperties.windowId = parseInt(windowId);
+          }
+          
+          const tab = await browser.tabs.create(createProperties);
+          resultTabId = tab.id;
+          
+          // 缓存 URL 与标签页的映射
+          if (this.deduplicator) {
+            this.deduplicator.cacheUrlTab(url, resultTabId);
+          }
+        }
+      }
       
-      // 获取cookies
-      const cookies = await this.getTabCookies(resultTabId);
+      // 等待页面加载完成（带超时）
+      if (!isExistingTab) {
+        await this.withTimeout(
+          this.waitForTabLoad(resultTabId),
+          timeout,
+          `页面加载超时`
+        );
+      }
+      
+      // 获取cookies（带超时）
+      const cookies = await this.withTimeout(
+        this.getTabCookies(resultTabId),
+        10000, // cookies 获取使用较短的超时
+        `获取Cookies超时`
+      ).catch(err => {
+        console.warn('获取Cookies失败:', err.message);
+        return []; // cookies 获取失败不影响主流程
+      });
       
       // 发送完成响应
       this.sendMessage({
@@ -660,6 +848,7 @@ class KaichiBrowserControl {
         tabId: resultTabId,
         url: url,
         cookies: cookies,
+        isExistingTab: isExistingTab,
         requestId: requestId,
         timestamp: new Date().toISOString()
       });
@@ -669,8 +858,17 @@ class KaichiBrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'OPEN_URL_ERROR'
       });
+    } finally {
+      // 从队列中移除请求
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -702,15 +900,21 @@ class KaichiBrowserControl {
 
   /**
    * 处理获取HTML请求
+   * 带超时保护
    */
   async handleGetHtml(message) {
+    const { tabId, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { tabId, requestId } = message;
-      
-      // 通过content script获取HTML
-      const results = await browser.tabs.executeScript(parseInt(tabId), {
-        code: 'document.documentElement.outerHTML'
-      });
+      // 使用超时包装器获取 HTML
+      const results = await this.withTimeout(
+        browser.tabs.executeScript(parseInt(tabId), {
+          code: 'document.documentElement.outerHTML'
+        }),
+        timeout,
+        `获取HTML超时`
+      );
       
       const html = results[0] || '';
       
@@ -732,8 +936,17 @@ class KaichiBrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'HTML_ERROR'
       });
+    } finally {
+      // 从队列中移除请求
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -779,11 +992,13 @@ class KaichiBrowserControl {
 
   /**
    * 处理执行脚本请求
+   * 带超时保护，确保在超时后返回错误响应
    */
   async handleExecuteScript(message) {
+    const { tabId, code, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { tabId, code, requestId } = message;
-      
       // 包装代码以支持 Promise 等待
       const wrappedCode = `
         (async function() {
@@ -800,9 +1015,12 @@ class KaichiBrowserControl {
         })();
       `;
       
-      const results = await browser.tabs.executeScript(parseInt(tabId), {
-        code: wrappedCode
-      });
+      // 使用超时包装器执行脚本
+      const results = await this.withTimeout(
+        browser.tabs.executeScript(parseInt(tabId), { code: wrappedCode }),
+        timeout,
+        `脚本执行超时`
+      );
       
       this.sendMessage({
         type: 'execute_script_complete',
@@ -817,8 +1035,17 @@ class KaichiBrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'SCRIPT_ERROR'
       });
+    } finally {
+      // 从队列中移除请求
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -1722,8 +1949,11 @@ class KaichiBrowserControl {
 
   /**
    * 处理执行脚本请求（通过 Content Script 中转）
+   * 带超时保护
    */
   async handleExecuteScriptRequest(payload, sender) {
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
       const { tabId, code } = payload || {};
       
@@ -1753,16 +1983,23 @@ class KaichiBrowserControl {
         })();
       `;
       
-      const results = await browser.tabs.executeScript(targetTabId, {
-        code: wrappedCode
-      });
+      // 使用超时包装器执行脚本
+      const results = await this.withTimeout(
+        browser.tabs.executeScript(targetTabId, { code: wrappedCode }),
+        timeout,
+        `脚本执行超时`
+      );
       
       return { 
         success: true, 
         data: { result: results[0], tabId: targetTabId }
       };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'SCRIPT_ERROR'
+      };
     }
   }
 
