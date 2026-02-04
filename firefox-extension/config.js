@@ -79,6 +79,7 @@ const DEFAULT_CONFIG = {
       'close_tab',          // 关闭标签页
       'execute_script',     // 执行脚本（高风险）
       'get_cookies',        // 获取 Cookies（高风险）
+      'get_cookies_by_domain', // 按域名获取 Cookies（高风险）
       'inject_css',         // 注入 CSS
       'get_page_info',      // 获取页面信息
       'upload_file_to_tab', // 上传文件到标签页
@@ -90,7 +91,8 @@ const DEFAULT_CONFIG = {
     // 这些操作在执行前会进行额外的安全检查
     sensitiveActions: [
       'execute_script',     // 可执行任意代码
-      'get_cookies'         // 可获取敏感的认证信息
+      'get_cookies',        // 可获取敏感的认证信息
+      'get_cookies_by_domain' // 可获取敏感的认证信息
     ],
     
     // 频率限制配置

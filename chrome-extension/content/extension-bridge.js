@@ -207,6 +207,19 @@
     }
 
     /**
+     * 按域名获取 Cookies（不需要 tabId）
+     * @param {string} domain 域名，如 "xiaohongshu.com"
+     * @param {boolean} includeSubdomains 是否包含子域名，默认 true
+     * @returns {Promise<Object>} 包含 cookies 数组的对象
+     */
+    async getCookiesByDomain(domain, includeSubdomains = true) {
+      if (!domain) {
+        throw new Error('domain 是必需的');
+      }
+      return this.request('get_cookies_by_domain', { domain, includeSubdomains });
+    }
+
+    /**
      * 打开 URL
      * @param {string} url 要打开的 URL
      * @param {number} tabId 可选，在指定标签页中打开

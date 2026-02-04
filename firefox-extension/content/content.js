@@ -24,7 +24,7 @@ class KaichiContentScript {
     // 允许的操作白名单
     this.allowedActions = [
       'get_tabs', 'get_html', 'open_url', 'close_tab',
-      'execute_script', 'get_cookies', 'inject_css',
+      'execute_script', 'get_cookies', 'get_cookies_by_domain', 'inject_css',
       'get_page_info', 'upload_file_to_tab'
     ];
     

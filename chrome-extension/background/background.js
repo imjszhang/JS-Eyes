@@ -63,11 +63,11 @@ const EXTENSION_CONFIG = {
   SECURITY: {
     allowedActions: [
       'get_tabs', 'get_html', 'open_url', 'close_tab',
-      'execute_script', 'get_cookies', 'inject_css',
+      'execute_script', 'get_cookies', 'get_cookies_by_domain', 'inject_css',
       'get_page_info', 'upload_file_to_tab',
       'subscribe_events', 'unsubscribe_events'
     ],
-    sensitiveActions: ['execute_script', 'get_cookies'],
+    sensitiveActions: ['execute_script', 'get_cookies', 'get_cookies_by_domain'],
     requestTimeout: 60000,
     // 认证配置
     auth: {
@@ -1450,6 +1450,10 @@ class KaichiBrowserControl {
         case 'get_cookies':
           await this.handleGetCookies(payload);
           break;
+        
+        case 'get_cookies_by_domain':
+          await this.handleGetCookiesByDomain(payload);
+          break;
           
         case 'upload_file_to_tab':
           await this.handleUploadFileToTab(payload);
@@ -1932,6 +1936,159 @@ class KaichiBrowserControl {
         message: error.message,
         requestId: message.requestId
       });
+    }
+  }
+
+  /**
+   * 处理按域名获取Cookies请求（不需要tabId，直接从浏览器获取）
+   */
+  async handleGetCookiesByDomain(message) {
+    try {
+      const { domain, includeSubdomains = true, requestId } = message;
+      
+      if (!domain) {
+        this.sendMessage({
+          type: 'error',
+          message: '缺少域名参数',
+          requestId: requestId
+        });
+        return;
+      }
+      
+      console.log(`[Cookie获取] 按域名获取cookies: ${domain}, 包含子域名: ${includeSubdomains}`);
+      
+      const cookies = await this.getCookiesByDomain(domain, includeSubdomains);
+      
+      this.sendMessage({
+        type: 'get_cookies_by_domain_complete',
+        domain: domain,
+        includeSubdomains: includeSubdomains,
+        cookies: cookies,
+        total: cookies.length,
+        requestId: requestId,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('处理按域名获取Cookies请求时出错:', error);
+      this.sendMessage({
+        type: 'error',
+        message: error.message,
+        requestId: message.requestId
+      });
+    }
+  }
+
+  /**
+   * 按域名获取cookies（直接从浏览器获取，不需要tabId）
+   * @param {string} domain 域名，如 "xiaohongshu.com"
+   * @param {boolean} includeSubdomains 是否包含子域名
+   * @returns {Promise<Array>} cookies数组
+   */
+  async getCookiesByDomain(domain, includeSubdomains = true) {
+    try {
+      console.log(`[Cookie获取] 开始按域名获取cookies: ${domain}`);
+      
+      const allCookies = [];
+      let fetchStats = {
+        mainDomain: 0,
+        parentDomain: 0,
+        subdomains: 0,
+        stores: 0,
+        total: 0,
+        errors: 0
+      };
+      
+      // 1. 获取精确域名的cookies
+      try {
+        const mainCookies = await chrome.cookies.getAll({ domain: domain });
+        allCookies.push(...mainCookies);
+        fetchStats.mainDomain = mainCookies.length;
+        console.log(`[Cookie获取] 主域名 ${domain}: ${mainCookies.length} 个cookies`);
+      } catch (error) {
+        console.warn(`[Cookie获取] 主域名获取失败:`, error);
+        fetchStats.errors++;
+      }
+      
+      // 2. 获取带点前缀的域名cookies（如 .xiaohongshu.com）
+      try {
+        const dotDomain = domain.startsWith('.') ? domain : '.' + domain;
+        const dotCookies = await chrome.cookies.getAll({ domain: dotDomain });
+        allCookies.push(...dotCookies);
+        fetchStats.parentDomain = dotCookies.length;
+        console.log(`[Cookie获取] 点域名 ${dotDomain}: ${dotCookies.length} 个cookies`);
+      } catch (error) {
+        console.debug(`[Cookie获取] 点域名获取失败:`, error);
+        fetchStats.errors++;
+      }
+      
+      // 3. 如果包含子域名，获取常见子域名的cookies
+      if (includeSubdomains) {
+        const baseDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+        const subdomainPatterns = [
+          'www.' + baseDomain,
+          'api.' + baseDomain,
+          'm.' + baseDomain,
+          'mobile.' + baseDomain,
+          'app.' + baseDomain,
+          'cdn.' + baseDomain,
+          'edith.' + baseDomain,  // 小红书特有
+          'sns-webpic-qc.' + baseDomain,
+          'fe-video-qc.' + baseDomain
+        ];
+        
+        let subdomainCount = 0;
+        for (const subdomain of subdomainPatterns) {
+          try {
+            const subCookies = await chrome.cookies.getAll({ domain: subdomain });
+            if (subCookies.length > 0) {
+              allCookies.push(...subCookies);
+              subdomainCount += subCookies.length;
+              console.log(`[Cookie获取] 子域名 ${subdomain}: ${subCookies.length} 个cookies`);
+            }
+          } catch (error) {
+            // 子域名获取失败是正常的，静默处理
+          }
+        }
+        fetchStats.subdomains = subdomainCount;
+      }
+      
+      // 4. 尝试从不同的cookie存储分区获取
+      try {
+        const stores = await chrome.cookies.getAllCookieStores();
+        let storeCount = 0;
+        for (const store of stores) {
+          try {
+            const storeCookies = await chrome.cookies.getAll({ 
+              domain: domain,
+              storeId: store.id 
+            });
+            if (storeCookies.length > 0) {
+              allCookies.push(...storeCookies);
+              storeCount += storeCookies.length;
+            }
+          } catch (error) {
+            // 静默处理
+          }
+        }
+        fetchStats.stores = storeCount;
+      } catch (error) {
+        console.debug('[Cookie获取] 存储分区获取失败:', error);
+      }
+      
+      // 5. 去重和验证
+      const uniqueCookies = this.deduplicateCookies(allCookies);
+      const validatedCookies = this.validateCookies(uniqueCookies);
+      fetchStats.total = validatedCookies.length;
+      
+      console.log(`[Cookie获取] 按域名完成 - 原始: ${allCookies.length}, 去重后: ${uniqueCookies.length}, 验证后: ${validatedCookies.length}`);
+      console.log(`[Cookie获取] 统计:`, fetchStats);
+      
+      return validatedCookies;
+      
+    } catch (error) {
+      console.error('[Cookie获取] 按域名获取cookies时出错:', error);
+      return [];
     }
   }
 
@@ -2559,6 +2716,9 @@ class KaichiBrowserControl {
           
         case 'get_cookies':
           return await this.handleGetCookiesRequest(payload);
+        
+        case 'get_cookies_by_domain':
+          return await this.handleGetCookiesByDomainRequest(payload);
           
         case 'inject_css':
           return await this.handleInjectCssRequest(payload);
@@ -2781,6 +2941,33 @@ class KaichiBrowserControl {
           cookies: cookies,
           url: tab.url,
           tabId: parseInt(tabId)
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * 处理按域名获取Cookies请求（通过 Content Script 中转）
+   */
+  async handleGetCookiesByDomainRequest(payload) {
+    try {
+      const { domain, includeSubdomains = true } = payload || {};
+      
+      if (!domain) {
+        return { success: false, error: '缺少 domain 参数' };
+      }
+      
+      const cookies = await this.getCookiesByDomain(domain, includeSubdomains);
+      
+      return { 
+        success: true, 
+        data: { 
+          cookies: cookies,
+          domain: domain,
+          includeSubdomains: includeSubdomains,
+          total: cookies.length
         }
       };
     } catch (error) {
