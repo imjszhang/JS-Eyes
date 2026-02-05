@@ -1,5 +1,5 @@
 /**
- * Kaichi Browser Control Extension - Background Script
+ * Browser Control Extension - Background Script
  * 
  * 负责与browserControlServer的WebSocket通信
  * 处理标签页管理、内容获取、脚本执行等功能
@@ -10,7 +10,7 @@
  * - 敏感操作权限验证
  */
 
-class KaichiBrowserControl {
+class BrowserControl {
   constructor() {
     this.ws = null;
     this.isConnected = false;
@@ -104,9 +104,9 @@ class KaichiBrowserControl {
       // SSE 客户端（作为 WebSocket 降级方案）
       this.initSSEClient(Utils);
       
-      console.log('[KaichiBrowserControl] 稳定性工具已初始化');
+      console.log('[BrowserControl] 稳定性工具已初始化');
     } else {
-      console.warn('[KaichiBrowserControl] ExtensionUtils 未加载，使用降级模式');
+      console.warn('[BrowserControl] ExtensionUtils 未加载，使用降级模式');
       
       // 降级模式：提供基本功能
       this.rateLimiter = null;
@@ -138,7 +138,7 @@ class KaichiBrowserControl {
    */
   initHealthChecker(Utils) {
     if (!Utils || !Utils.HealthChecker) {
-      console.warn('[KaichiBrowserControl] HealthChecker 类不可用');
+      console.warn('[BrowserControl] HealthChecker 类不可用');
       this.healthChecker = null;
       return;
     }
@@ -149,7 +149,7 @@ class KaichiBrowserControl {
       : { enabled: true, interval: 30000, endpoint: '/api/browser/health' };
     
     if (!healthConfig.enabled) {
-      console.log('[KaichiBrowserControl] 健康检查已禁用');
+      console.log('[BrowserControl] 健康检查已禁用');
       this.healthChecker = null;
       return;
     }
@@ -183,7 +183,7 @@ class KaichiBrowserControl {
       }
     };
     
-    console.log('[KaichiBrowserControl] 健康检查器已初始化');
+    console.log('[BrowserControl] 健康检查器已初始化');
   }
   
   /**
@@ -192,7 +192,7 @@ class KaichiBrowserControl {
    */
   initSSEClient(Utils) {
     if (!Utils || !Utils.SSEClient) {
-      console.warn('[KaichiBrowserControl] SSEClient 类不可用');
+      console.warn('[BrowserControl] SSEClient 类不可用');
       this.sseClient = null;
       return;
     }
@@ -203,7 +203,7 @@ class KaichiBrowserControl {
       : { enabled: true, endpoint: '/api/browser/events' };
     
     if (!sseConfig.enabled) {
-      console.log('[KaichiBrowserControl] SSE 已禁用');
+      console.log('[BrowserControl] SSE 已禁用');
       this.sseClient = null;
       return;
     }
@@ -248,16 +248,16 @@ class KaichiBrowserControl {
     };
     
     this.sseClient.onConnect = () => {
-      console.log('[KaichiBrowserControl] SSE 连接成功（降级模式）');
+      console.log('[BrowserControl] SSE 连接成功（降级模式）');
       this.broadcastStatusUpdate();
     };
     
     this.sseClient.onDisconnect = () => {
-      console.log('[KaichiBrowserControl] SSE 连接断开');
+      console.log('[BrowserControl] SSE 连接断开');
       this.broadcastStatusUpdate();
     };
     
-    console.log('[KaichiBrowserControl] SSE 客户端已初始化');
+    console.log('[BrowserControl] SSE 客户端已初始化');
   }
   
   /**
@@ -357,7 +357,7 @@ class KaichiBrowserControl {
    * 初始化扩展
    */
   async init() {
-    console.log('Kaichi Browser Control Extension 正在初始化...');
+    console.log('Browser Control Extension 正在初始化...');
     
     // 加载用户设置
     await this.loadSettings();
@@ -525,11 +525,12 @@ class KaichiBrowserControl {
       this.ws.onopen = () => {
         console.log('WebSocket连接已建立，等待服务器认证挑战...');
         this.isConnected = true;
-        this.reconnectAttempts = 0;
         this.isReconnecting = false;
         this.authState = 'authenticating';
         this.connectionMode = 'websocket';
-        this.wsConsecutiveFailures = 0; // 重置连续失败计数
+        
+        // 重置重连计数器
+        this.resetReconnectCounter();
         
         // 清除重连定时器
         if (this.reconnectTimer) {
@@ -544,7 +545,7 @@ class KaichiBrowserControl {
         
         // 如果之前使用 SSE 降级模式，断开 SSE
         if (this.sseClient && this.sseClient.isConnected) {
-          console.log('[KaichiBrowserControl] WebSocket 恢复，断开 SSE 降级连接');
+          console.log('[BrowserControl] WebSocket 恢复，断开 SSE 降级连接');
           this.sseClient.disconnect();
         }
         
@@ -2838,7 +2839,13 @@ class KaichiBrowserControl {
   }
 
   /**
-   * 尝试自动重连（无限重试，使用指数退避）
+   * 尝试自动重连（无限重试，使用指数退避 + 抖动）
+   * 
+   * 重连策略：
+   * - 指数退避：2s → 4s → 8s → 16s → 32s → 60s（最大）
+   * - 随机抖动：±25% 的随机偏移，避免多客户端同时重连
+   * - 无限重试：持续尝试直到连接成功或手动停止
+   * - 认证失败保护：认证失败后不自动重连，需要用户检查密钥
    */
   attemptReconnect() {
     // 如果已经在重连或未启用自动连接，则返回
@@ -2849,6 +2856,8 @@ class KaichiBrowserControl {
     // 如果认证失败，不自动重连（需要用户检查密钥）
     if (this.authState === 'failed') {
       console.log('认证失败状态，跳过自动重连。请检查认证密钥配置。');
+      // 广播状态更新，让用户知道需要检查认证
+      this.broadcastStatusUpdate();
       return;
     }
     
@@ -2859,9 +2868,14 @@ class KaichiBrowserControl {
     // 2s → 4s → 8s → 16s → 32s → 60s（之后保持60s）
     const baseDelay = 2000; // 2秒
     const maxDelay = 60000; // 60秒
-    const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay);
+    const exponentialDelay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay);
     
-    console.log(`准备在第 ${this.reconnectAttempts} 次尝试重连，延迟 ${delay}ms...`);
+    // 添加 ±25% 的随机抖动，避免多客户端同时重连（thundering herd 问题）
+    const jitterFactor = 0.25;
+    const jitter = exponentialDelay * (Math.random() * jitterFactor * 2 - jitterFactor);
+    const delay = Math.round(exponentialDelay + jitter);
+    
+    console.log(`准备在第 ${this.reconnectAttempts} 次尝试重连，延迟 ${delay}ms（基础: ${exponentialDelay}ms, 抖动: ${Math.round(jitter)}ms）...`);
     
     // 设置重连定时器
     this.reconnectTimer = setTimeout(() => {
@@ -2873,6 +2887,16 @@ class KaichiBrowserControl {
         this.isReconnecting = false;
       }
     }, delay);
+  }
+
+  /**
+   * 重置重连计数器
+   * 在成功连接后调用，为下次断开做准备
+   */
+  resetReconnectCounter() {
+    this.reconnectAttempts = 0;
+    this.wsConsecutiveFailures = 0;
+    console.log('[Reconnect] 重连计数器已重置');
   }
 
   /**
@@ -2911,7 +2935,7 @@ class KaichiBrowserControl {
    * 降级到 SSE 模式
    */
   fallbackToSSE() {
-    console.log('[KaichiBrowserControl] WebSocket 连续失败，降级到 SSE 模式');
+    console.log('[BrowserControl] WebSocket 连续失败，降级到 SSE 模式');
     
     // 停止 WebSocket 重连
     this.stopAutoReconnect();
@@ -2949,7 +2973,7 @@ class KaichiBrowserControl {
     
     this.wsRecoveryTimer = setInterval(() => {
       if (this.connectionMode === 'sse' && !this.isConnected) {
-        console.log('[KaichiBrowserControl] 尝试恢复 WebSocket 连接...');
+        console.log('[BrowserControl] 尝试恢复 WebSocket 连接...');
         this.wsConsecutiveFailures = 0; // 重置失败计数
         this.connectionMode = 'websocket';
         this.connect();
@@ -2977,7 +3001,7 @@ class KaichiBrowserControl {
     this.connectionMode = 'websocket';
     this.wsConsecutiveFailures = 0;
     
-    console.log('[KaichiBrowserControl] 已停止 SSE 降级模式');
+    console.log('[BrowserControl] 已停止 SSE 降级模式');
   }
 
   /**
@@ -3062,9 +3086,9 @@ class KaichiBrowserControl {
 }
 
 // 初始化扩展
-const kaichiBrowserControl = new KaichiBrowserControl();
+const browserControl = new BrowserControl();
 
 // 导出供其他脚本使用
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = KaichiBrowserControl;
+  module.exports = BrowserControl;
 }

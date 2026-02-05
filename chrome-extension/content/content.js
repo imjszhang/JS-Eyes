@@ -1,5 +1,5 @@
 /**
- * Kaichi Browser Control Extension - Content Script (Chrome)
+ * Browser Control Extension - Content Script (Chrome)
  * 
  * 在网页中运行，负责获取页面信息和执行页面操作
  * 
@@ -10,7 +10,7 @@
  * - 请求频率限制
  */
 
-class KaichiContentScript {
+class ContentScript {
   constructor() {
     this.isInitialized = false;
     this.pageInfo = null;
@@ -42,7 +42,7 @@ class KaichiContentScript {
   init() {
     if (this.isInitialized) return;
     
-    console.log('Kaichi Content Script 正在初始化...');
+    console.log('Content Script 正在初始化...');
     
     // 等待DOM加载完成
     if (document.readyState === 'loading') {
@@ -72,7 +72,7 @@ class KaichiContentScript {
     // 监听页面变化
     this.setupPageObserver();
     
-    console.log('Kaichi Content Script 初始化完成（安全中转模式已启用）');
+    console.log('Content Script 初始化完成（安全中转模式已启用）');
   }
 
   /**
@@ -586,9 +586,9 @@ class KaichiContentScript {
 }
 
 // 初始化content script
-const kaichiContentScript = new KaichiContentScript();
+const contentScript = new ContentScript();
 
 // 导出供其他脚本使用
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = KaichiContentScript;
+  module.exports = ContentScript;
 }

@@ -1,5 +1,33 @@
 # Release Notes
 
+## v1.3.2
+
+### Changes
+- Refactor code: Rename classes from `KaichiBrowserControl`/`KaichiContentScript` to `BrowserControl`/`ContentScript`
+- Improve reconnection mechanism: Add jitter (random offset) to prevent thundering herd problem when multiple clients reconnect simultaneously
+- Add `resetReconnectCounter()` method for better connection state management
+- Enhanced logging and error messages
+
+### Downloads
+- [Chrome Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.3.2/js-eyes-chrome-v1.3.2.zip)
+- [Firefox Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.3.2/js-eyes-firefox-v1.3.2.xpi)
+
+### Installation Instructions
+
+#### Chrome/Edge
+1. Download `js-eyes-chrome-v1.3.2.zip`
+2. Extract the ZIP file
+3. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`)
+4. Enable "Developer mode" in the top right
+5. Click "Load unpacked"
+6. Select the extracted folder
+
+#### Firefox
+1. Download `js-eyes-firefox-v1.3.2.xpi`
+2. Open Firefox browser
+3. Drag and drop the `.xpi` file into the browser window
+4. Confirm installation
+
 ## v1.3.1
 
 ### Changes
