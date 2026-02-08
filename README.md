@@ -128,14 +128,14 @@ If you encounter connection issues:
 ### Build Commands
 
 ```bash
-# Build all extensions
+# Build all extensions (Firefox is signed automatically)
 npm run build
 
 # Build Chrome extension only
 npm run build:chrome
 
 # Build and sign Firefox extension
-npm run build:firefox:sign
+npm run build:firefox
 
 # Bump version across all manifests
 npm run bump -- 1.4.0

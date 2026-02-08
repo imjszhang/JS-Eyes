@@ -7,7 +7,7 @@
     "build": "node releases/build.js all",
     "build:chrome": "node releases/build.js chrome",
     "build:firefox": "node releases/build.js firefox",
-    "build:firefox:sign": "node releases/build.js firefox --sign",
+    "build:firefox:dev": "node releases/build.js firefox --no-sign",
     "bump": "node releases/build.js bump"
   },
   "dependencies": {

@@ -8,8 +8,8 @@
  *
  * 命令:
  *   chrome              打包 Chrome 扩展为 ZIP
- *   firefox [--sign]    打包/签名 Firefox 扩展
- *   all [--sign]        打包所有扩展
+ *   firefox [--no-sign] 打包并签名 Firefox 扩展（默认签名，--no-sign 跳过）
+ *   all [--no-sign]     打包所有扩展（Firefox 默认签名）
  *   bump <version>      同步版本号到所有 manifest.json
  */
 
@@ -224,9 +224,10 @@ async function buildChrome() {
 }
 
 /**
- * 打包/签名 Firefox 扩展
+ * 打包并签名 Firefox 扩展
+ * @param {boolean} sign - 是否签名，默认 true（未签名的 Firefox 扩展无法使用）
  */
-async function buildFirefox(sign = false) {
+async function buildFirefox(sign = true) {
   console.log('');
   console.log('──── 打包 Firefox 扩展 ────');
   console.log('');
@@ -246,11 +247,8 @@ async function buildFirefox(sign = false) {
   }
 
   if (!sign) {
-    console.log('  提示: Firefox 扩展需要签名才能正常安装');
-    console.log('  建议使用: node releases/build.js firefox --sign');
-    console.log('  或: npm run build:firefox:sign');
-    console.log('');
-    console.log('  ⚠ 未签名，跳过 Firefox 打包');
+    console.log('  ⚠ 已跳过签名（--no-sign）');
+    console.log('  注意: 未签名的 Firefox 扩展无法正常安装，仅可通过 about:debugging 临时加载');
     return;
   }
 
@@ -322,7 +320,7 @@ async function buildFirefox(sign = false) {
 /**
  * 打包所有扩展
  */
-async function buildAll(sign = false) {
+async function buildAll(sign = true) {
   console.log('========================================');
   console.log('   JS Eyes 扩展打包工具');
   console.log(`   版本: ${getVersion()}`);
@@ -407,29 +405,30 @@ function showHelp() {
   console.log('用法: node releases/build.js <command> [options]');
   console.log('');
   console.log('命令:');
-  console.log('  chrome              打包 Chrome 扩展为 ZIP');
-  console.log('  firefox [--sign]    打包/签名 Firefox 扩展');
-  console.log('  all [--sign]        打包所有扩展');
-  console.log('  bump <version>      同步版本号到所有 manifest.json');
+  console.log('  chrome                打包 Chrome 扩展为 ZIP');
+  console.log('  firefox [--no-sign]   打包并签名 Firefox 扩展（默认签名）');
+  console.log('  all [--no-sign]       打包所有扩展（Firefox 默认签名）');
+  console.log('  bump <version>        同步版本号到所有 manifest.json');
   console.log('');
   console.log('快捷方式 (npm scripts):');
-  console.log('  npm run build              打包所有扩展');
+  console.log('  npm run build              打包所有扩展（Firefox 自动签名）');
   console.log('  npm run build:chrome       打包 Chrome 扩展');
-  console.log('  npm run build:firefox      打包 Firefox 扩展 (不签名)');
-  console.log('  npm run build:firefox:sign 打包并签名 Firefox 扩展');
+  console.log('  npm run build:firefox      打包并签名 Firefox 扩展');
+  console.log('  npm run build:firefox:dev  打包 Firefox 扩展（不签名，仅开发用）');
   console.log('  npm run bump -- 1.4.0      同步版本号');
   console.log('');
   console.log('示例:');
   console.log('  node releases/build.js chrome');
-  console.log('  node releases/build.js firefox --sign');
-  console.log('  node releases/build.js all --sign');
+  console.log('  node releases/build.js firefox');
+  console.log('  node releases/build.js firefox --no-sign');
+  console.log('  node releases/build.js all');
   console.log('  node releases/build.js bump 1.4.0');
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
-  const hasSign = args.includes('--sign');
+  const noSign = args.includes('--no-sign');
 
   switch (command) {
     case 'chrome':
@@ -437,11 +436,11 @@ async function main() {
       break;
 
     case 'firefox':
-      await buildFirefox(hasSign);
+      await buildFirefox(!noSign);
       break;
 
     case 'all':
-      await buildAll(hasSign);
+      await buildAll(!noSign);
       break;
 
     case 'bump':

@@ -17,17 +17,17 @@
 ### npm scripts（推荐）
 
 ```bash
-# 打包所有扩展
+# 打包所有扩展（Firefox 自动签名）
 npm run build
 
 # 仅打包 Chrome 扩展
 npm run build:chrome
 
-# 仅打包 Firefox 扩展（不签名，仅提示）
+# 打包并签名 Firefox 扩展（默认签名）
 npm run build:firefox
 
-# 打包并签名 Firefox 扩展
-npm run build:firefox:sign
+# 打包 Firefox 扩展（不签名，仅开发调试用）
+npm run build:firefox:dev
 
 # 同步版本号到所有 manifest.json
 npm run bump -- 1.4.0
@@ -37,8 +37,9 @@ npm run bump -- 1.4.0
 
 ```bash
 node releases/build.js chrome
-node releases/build.js firefox --sign
-node releases/build.js all --sign
+node releases/build.js firefox
+node releases/build.js firefox --no-sign   # 仅开发调试，跳过签名
+node releases/build.js all
 node releases/build.js bump 1.4.0
 ```
 

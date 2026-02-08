@@ -128,14 +128,14 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 ### 构建命令
 
 ```bash
-# 打包所有扩展
+# 打包所有扩展（Firefox 自动签名）
 npm run build
 
 # 仅打包 Chrome 扩展
 npm run build:chrome
 
 # 打包并签名 Firefox 扩展
-npm run build:firefox:sign
+npm run build:firefox
 
 # 同步版本号到所有 manifest
 npm run bump -- 1.4.0
