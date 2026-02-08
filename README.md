@@ -52,8 +52,8 @@ JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.
 
 Download the latest release from [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest):
 
-- **Chrome/Edge Extension**: `js-eyes-chrome-v1.3.1.zip`
-- **Firefox Extension**: `js-eyes-firefox-v1.3.1.xpi`
+- **Chrome/Edge Extension**: `js-eyes-chrome-v1.3.3.zip`
+- **Firefox Extension**: `js-eyes-firefox-v1.3.3.xpi`
 
 ### Installation from Source
 
@@ -117,6 +117,31 @@ If you encounter connection issues:
 - Ensure DeepSeek Cowork is running
 - Verify server address and port settings
 - Check browser console for error messages
+
+## Building
+
+### Prerequisites
+
+- Node.js >= 14
+- Run `npm install` in the project root
+
+### Build Commands
+
+```bash
+# Build all extensions
+npm run build
+
+# Build Chrome extension only
+npm run build:chrome
+
+# Build and sign Firefox extension
+npm run build:firefox:sign
+
+# Bump version across all manifests
+npm run bump -- 1.4.0
+```
+
+Output files are saved to the `dist/` directory. See [releases/README.md](releases/README.md) for detailed documentation.
 
 ## Related Projects
 

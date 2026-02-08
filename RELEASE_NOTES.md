@@ -1,5 +1,33 @@
 # Release Notes
 
+## v1.3.3
+
+### Changes
+- Unified build scripts: replaced 6 platform-specific shell scripts (PS1/SH) + sign-firefox.js with a single cross-platform Node.js build script (`releases/build.js`)
+- Added root `package.json` as the single source of truth for version management
+- Added `bump` command to sync version across `package.json`, `chrome-extension/manifest.json`, and `firefox-extension/manifest.json` in one step
+- Added npm scripts for convenient build commands (`npm run build`, `npm run build:chrome`, `npm run build:firefox:sign`, `npm run bump`)
+
+### Downloads
+- [Chrome Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.3.3/js-eyes-chrome-v1.3.3.zip)
+- [Firefox Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.3.3/js-eyes-firefox-v1.3.3.xpi)
+
+### Installation Instructions
+
+#### Chrome/Edge
+1. Download `js-eyes-chrome-v1.3.3.zip`
+2. Extract the ZIP file
+3. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`)
+4. Enable "Developer mode" in the top right
+5. Click "Load unpacked"
+6. Select the extracted folder
+
+#### Firefox
+1. Download `js-eyes-firefox-v1.3.3.xpi`
+2. Open Firefox browser
+3. Drag and drop the `.xpi` file into the browser window
+4. Confirm installation
+
 ## v1.3.2
 
 ### Changes

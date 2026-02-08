@@ -64,6 +64,17 @@ class BrowserControl {
     this.sessionExpiresAt = null;    // 会话过期时间
     this.authTimeout = null;         // 认证超时定时器
     
+    // 应用层心跳相关
+    this.heartbeatTimer = null;      // 心跳定时器
+    this.lastPongTime = null;        // 上次收到 pong 的时间
+    this.heartbeatIntervalMs = 25000; // 心跳间隔 25 秒
+    this.heartbeatMissThreshold = 2; // 连续丢失多少次 pong 后断开
+    this.connectStartTime = null;    // 连接建立时间（用于诊断）
+    
+    // 标签页数据防抖
+    this.tabDataDebounceTimer = null;
+    this.tabDataDebounceMs = 500;    // 防抖间隔 500ms
+    
     // 稳定性相关工具（从 utils.js 加载）
     this.initStabilityTools();
     
@@ -528,6 +539,7 @@ class BrowserControl {
         this.isReconnecting = false;
         this.authState = 'authenticating';
         this.connectionMode = 'websocket';
+        this.connectStartTime = Date.now();
         
         // 重置重连计数器
         this.resetReconnectCounter();
@@ -579,8 +591,12 @@ class BrowserControl {
       };
       
       this.ws.onclose = (event) => {
-        console.log('WebSocket连接已关闭:', event.code, event.reason);
+        const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
+        console.log(`WebSocket连接已关闭: code=${event.code}, reason=${event.reason}, authState=${this.authState}, duration=${duration}ms`);
         this.isConnected = false;
+        
+        // 停止应用层心跳
+        this.stopHeartbeat();
         
         // 清除认证超时
         if (this.authTimeout) {
@@ -608,8 +624,10 @@ class BrowserControl {
       };
       
       this.ws.onerror = (error) => {
-        console.error('WebSocket错误:', error);
+        const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
+        console.error(`WebSocket错误: authState=${this.authState}, duration=${duration}ms`, error);
         this.isConnected = false;
+        this.stopHeartbeat();
         this.wsConsecutiveFailures = (this.wsConsecutiveFailures || 0) + 1;
         
         console.log(`[WebSocket] 连续失败次数: ${this.wsConsecutiveFailures}/${this.sseFallbackThreshold || 5}`);
@@ -739,18 +757,28 @@ class BrowserControl {
         }, refreshDelay);
       }
       
-      // 发送初始化消息（使用新版协议）
-      this.sendMessage({
+      // 发送初始化通知（不需要响应，服务端会回复 init_ack）
+      this.sendNotification({
         type: 'init',
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent
+        payload: {
+          userAgent: navigator.userAgent
+        },
+        timestamp: new Date().toISOString()
       });
       
       // 立即发送一次标签页数据
       this.sendTabsData();
       
-      // 从服务端同步配置
-      this.syncServerConfig();
+      // 启动应用层心跳
+      this.startHeartbeat();
+      
+      // 注意：syncServerConfig 现在可以由 init_ack 的 serverConfig 替代
+      // 保留 HTTP 调用作为后备，延迟执行以给 init_ack 时间到达
+      setTimeout(() => {
+        if (!this.serverConfig) {
+          this.syncServerConfig();
+        }
+      }, 3000);
       
     } else {
       console.error('认证失败:', message.error);
@@ -882,6 +910,53 @@ class BrowserControl {
     this.reconnectWithNewSettings();
   }
 
+  /**
+   * 启动应用层心跳
+   * 定期发送 ping 消息，检测连接是否存活
+   */
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.lastPongTime = Date.now();
+    
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.isConnected || this.ws.readyState !== WebSocket.OPEN) {
+        this.stopHeartbeat();
+        return;
+      }
+      
+      // 检查是否有 pong 响应
+      const timeSinceLastPong = Date.now() - this.lastPongTime;
+      const maxMissTime = this.heartbeatIntervalMs * this.heartbeatMissThreshold;
+      
+      if (timeSinceLastPong > maxMissTime) {
+        console.warn(`[Heartbeat] 心跳超时: ${timeSinceLastPong}ms 未收到 pong（阈值: ${maxMissTime}ms），关闭连接`);
+        this.stopHeartbeat();
+        if (this.ws) {
+          this.ws.close(1000, 'Heartbeat timeout');
+        }
+        return;
+      }
+      
+      // 发送 ping
+      this.sendRawMessage({
+        type: 'ping',
+        sessionId: this.sessionId,
+        timestamp: new Date().toISOString()
+      });
+    }, this.heartbeatIntervalMs);
+    
+    console.log(`[Heartbeat] 已启动应用层心跳 (间隔: ${this.heartbeatIntervalMs}ms)`);
+  }
+
+  /**
+   * 停止应用层心跳
+   */
+  stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
 
   /**
    * 发送原始消息到服务器（不添加 sessionId，用于认证流程）
@@ -897,26 +972,58 @@ class BrowserControl {
   }
 
   /**
-   * 发送消息到服务器
-   * 如果已认证，自动添加 sessionId
+   * 发送通知型消息到服务器（不需要响应，不附加 requestId）
+   * 用于 init、data 等信息性消息
+   */
+  sendNotification(message) {
+    if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
+      if (this.authState === 'authenticated' && this.sessionId) {
+        // 通知型协议格式：不带 requestId
+        const wrappedMessage = {
+          type: 'notification',
+          sessionId: this.sessionId,
+          action: message.type,
+          payload: message.payload || {},
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+        this.ws.send(JSON.stringify(wrappedMessage));
+      } else {
+        // 旧协议格式或未认证时直接发送
+        this.ws.send(JSON.stringify(message));
+      }
+      return true;
+    } else {
+      console.warn('WebSocket未连接，无法发送通知:', message);
+      return false;
+    }
+  }
+
+  /**
+   * 发送消息到服务器（请求型，需要响应）
+   * 如果已认证，自动添加 sessionId 和 requestId
    */
   sendMessage(message) {
     if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
       // 如果已认证且有 sessionId，使用新协议格式
       if (this.authState === 'authenticated' && this.sessionId) {
-        // 新协议格式：将原消息包装为 request
+        // 提取有效载荷：如果 message 有 payload 属性则直接使用，否则提取除元数据外的属性
+        let payload;
+        if (message.payload !== undefined) {
+          payload = message.payload;
+        } else {
+          // 从 message 中提取除 type/timestamp/requestId 外的属性作为 payload
+          const { type, timestamp, requestId, ...rest } = message;
+          payload = rest;
+        }
+        
         const wrappedMessage = {
           type: 'request',
           sessionId: this.sessionId,
           requestId: message.requestId || this.generateRequestId(),
           action: message.type,
-          payload: { ...message },
+          payload: payload,
           timestamp: message.timestamp || new Date().toISOString()
         };
-        // 移除 payload 中的冗余字段
-        delete wrappedMessage.payload.type;
-        delete wrappedMessage.payload.timestamp;
-        delete wrappedMessage.payload.requestId;
         
         this.ws.send(JSON.stringify(wrappedMessage));
       } else {
@@ -946,7 +1053,7 @@ class BrowserControl {
       const message = JSON.parse(data);
       console.log('收到服务器消息:', message.type, message);
       
-      // 优先处理认证相关消息（不受限制）
+      // 优先处理认证相关消息和控制消息（不受限制）
       switch (message.type) {
         case 'auth_challenge':
           await this.handleAuthChallenge(message);
@@ -959,6 +1066,21 @@ class BrowserControl {
         case 'response':
           // 处理新协议的响应消息
           await this.handleServerResponse(message);
+          return;
+          
+        case 'init_ack':
+          // 服务端确认 init，可能包含服务端配置
+          console.log('收到 init_ack:', message.status);
+          if (message.serverConfig) {
+            this.applyServerConfig(message.serverConfig);
+          }
+          // 广播状态更新
+          this.broadcastStatusUpdate();
+          return;
+          
+        case 'pong':
+          // 应用层心跳响应
+          this.lastPongTime = Date.now();
           return;
       }
       
@@ -2287,33 +2409,47 @@ class BrowserControl {
   }
 
   /**
+   * 防抖发送标签页数据
+   * 合并短时间内的多次标签页变化事件为一次发送
+   */
+  debouncedSendTabsData() {
+    if (this.tabDataDebounceTimer) {
+      clearTimeout(this.tabDataDebounceTimer);
+    }
+    this.tabDataDebounceTimer = setTimeout(() => {
+      this.tabDataDebounceTimer = null;
+      this.sendTabsData();
+    }, this.tabDataDebounceMs);
+  }
+
+  /**
    * 设置标签页事件监听
    */
   setupTabListeners() {
     // 标签页创建
     browser.tabs.onCreated.addListener((tab) => {
       console.log('标签页创建:', tab.id, tab.url);
-      setTimeout(() => this.sendTabsData(), 1000);
+      this.debouncedSendTabsData();
     });
     
     // 标签页更新
     browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete') {
         console.log('标签页加载完成:', tabId, tab.url);
-        setTimeout(() => this.sendTabsData(), 500);
+        this.debouncedSendTabsData();
       }
     });
     
     // 标签页移除
     browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
       console.log('标签页移除:', tabId);
-      setTimeout(() => this.sendTabsData(), 500);
+      this.debouncedSendTabsData();
     });
     
     // 标签页激活
     browser.tabs.onActivated.addListener((activeInfo) => {
       console.log('标签页激活:', activeInfo.tabId);
-      setTimeout(() => this.sendTabsData(), 200);
+      this.debouncedSendTabsData();
     });
   }
 
@@ -3041,12 +3177,12 @@ class BrowserControl {
     // 立即发送一次
     this.sendTabsData();
     
-    // 每5秒发送一次标签页数据
+    // 每15秒发送一次标签页数据（降低轮询频率，标签页变化由事件驱动防抖发送）
     setInterval(() => {
       if (this.isConnected) {
         this.sendTabsData();
       }
-    }, 5000);
+    }, 15000);
   }
 
   /**
@@ -3070,7 +3206,7 @@ class BrowserControl {
         status: tab.status || 'complete'
       }));
       
-      this.sendMessage({
+      this.sendNotification({
         type: 'data',
         payload: {
           tabs: tabsData,

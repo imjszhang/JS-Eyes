@@ -52,8 +52,8 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 
 从 [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest) 下载最新版本：
 
-- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.3.1.zip`
-- **Firefox 扩展**: `js-eyes-firefox-v1.3.1.xpi`
+- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.3.3.zip`
+- **Firefox 扩展**: `js-eyes-firefox-v1.3.3.xpi`
 
 ### 从源代码安装
 
@@ -117,6 +117,31 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 - 确认 DeepSeek Cowork 应用正在运行
 - 检查服务器地址和端口设置
 - 查看浏览器控制台错误信息
+
+## 构建与发布
+
+### 前置条件
+
+- Node.js >= 14
+- 在项目根目录执行 `npm install`
+
+### 构建命令
+
+```bash
+# 打包所有扩展
+npm run build
+
+# 仅打包 Chrome 扩展
+npm run build:chrome
+
+# 打包并签名 Firefox 扩展
+npm run build:firefox:sign
+
+# 同步版本号到所有 manifest
+npm run bump -- 1.4.0
+```
+
+输出文件保存在 `dist/` 目录。详细文档见 [releases/README.md](../releases/README.md)。
 
 ## 相关项目
 

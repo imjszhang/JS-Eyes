@@ -1,0 +1,16 @@
+{
+  "name": "js-eyes",
+  "version": "1.3.3",
+  "private": true,
+  "description": "JS Eyes - Browser Extension for JavaScript debugging",
+  "scripts": {
+    "build": "node releases/build.js all",
+    "build:chrome": "node releases/build.js chrome",
+    "build:firefox": "node releases/build.js firefox",
+    "build:firefox:sign": "node releases/build.js firefox --sign",
+    "bump": "node releases/build.js bump"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1"
+  }
+}
