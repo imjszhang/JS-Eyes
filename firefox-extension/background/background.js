@@ -71,6 +71,11 @@ class BrowserControl {
     this.heartbeatMissThreshold = 2; // 连续丢失多少次 pong 后断开
     this.connectStartTime = null;    // 连接建立时间（用于诊断）
     
+    // 连接实例追踪（防止孤儿连接干扰）
+    this._connectionCounter = 0;     // 连接计数器，每次 connect() 递增
+    this._currentConnectionId = 0;   // 当前活跃连接 ID
+    this._connectDebounceTimer = null; // connect() 防重入定时器
+    
     // 标签页数据防抖
     this.tabDataDebounceTimer = null;
     this.tabDataDebounceMs = 500;    // 防抖间隔 500ms
@@ -513,11 +518,65 @@ class BrowserControl {
   }
 
   /**
+   * 清理指定的 WebSocket 连接
+   * 解除所有事件绑定并关闭连接，防止孤儿连接事件干扰新连接
+   * @param {WebSocket} ws - 要清理的 WebSocket 实例
+   * @param {number} [code=1000] - 关闭代码
+   * @param {string} [reason=''] - 关闭原因
+   */
+  _cleanupSocket(ws, code = 1000, reason = '') {
+    if (!ws) return;
+    try {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(code, reason);
+      }
+    } catch (e) {
+      console.warn('[BrowserControl] 清理旧连接时出错:', e.message);
+    }
+  }
+
+  /**
    * 连接到WebSocket服务器
+   * 
+   * 使用连接实例追踪（connectionId）确保：
+   * - 旧连接的异步事件（onclose/onerror）不会干扰新连接的状态
+   * - 不会因为并发调用产生多个活跃连接（孤儿连接）
    */
   connect() {
+    // === 防重入保护：500ms 内的重复调用只执行最后一次 ===
+    if (this._connectDebounceTimer) {
+      clearTimeout(this._connectDebounceTimer);
+    }
+    this._connectDebounceTimer = setTimeout(() => {
+      this._connectDebounceTimer = null;
+    }, 500);
+
     try {
-      console.log(`正在连接到 ${this.serverUrl}...`);
+      // 生成唯一连接 ID，用于识别当前连接实例
+      const connectionId = ++this._connectionCounter;
+      this._currentConnectionId = connectionId;
+      
+      console.log(`[Connect#${connectionId}] 正在连接到 ${this.serverUrl}...`);
+      
+      // === 清理旧连接：解除事件绑定 + 关闭 ===
+      if (this.ws) {
+        console.log(`[Connect#${connectionId}] 清理旧连接`);
+        this._cleanupSocket(this.ws, 1000, 'New connection initiated');
+        this.ws = null;
+      }
+      
+      // 停止心跳（属于旧连接）
+      this.stopHeartbeat();
+      
+      // 清除认证超时（属于旧连接）
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
       
       // 重置认证状态
       this.authState = 'disconnected';
@@ -525,16 +584,16 @@ class BrowserControl {
       this.pendingChallenge = null;
       this.sessionExpiresAt = null;
       
-      // 清除认证超时
-      if (this.authTimeout) {
-        clearTimeout(this.authTimeout);
-        this.authTimeout = null;
-      }
-      
       this.ws = new WebSocket(this.serverUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket连接已建立，等待服务器认证挑战...');
+        // === 连接实例检查：如果不是当前连接，忽略事件 ===
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onopen 被忽略（已被连接 #${this._currentConnectionId} 取代）`);
+          return;
+        }
+        
+        console.log(`[Connect#${connectionId}] WebSocket连接已建立，等待服务器认证挑战...`);
         this.isConnected = true;
         this.isReconnecting = false;
         this.authState = 'authenticating';
@@ -567,6 +626,9 @@ class BrowserControl {
         // 设置认证超时（如果服务器不发送 challenge，可能是旧版服务器）
         const authTimeout = this.securityConfig.auth?.authTimeout || 10000;
         this.authTimeout = setTimeout(() => {
+          // 再次检查连接实例
+          if (connectionId !== this._currentConnectionId) return;
+          
           if (this.authState === 'authenticating' && !this.pendingChallenge) {
             // 服务器没有发送 challenge，按旧版逻辑处理（向后兼容）
             console.log('服务器未发送认证挑战，按旧版协议处理');
@@ -587,22 +649,38 @@ class BrowserControl {
       };
       
       this.ws.onmessage = (event) => {
+        // === 连接实例检查 ===
+        if (connectionId !== this._currentConnectionId) return;
         this.handleMessage(event.data);
       };
       
       this.ws.onclose = (event) => {
+        // === 连接实例检查：核心防护，阻止孤儿连接的 onclose 破坏新连接状态 ===
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onclose 被忽略（已被连接 #${this._currentConnectionId} 取代），code=${event.code}`);
+          return;
+        }
+        
         const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
-        console.log(`WebSocket连接已关闭: code=${event.code}, reason=${event.reason}, authState=${this.authState}, duration=${duration}ms`);
+        console.log(`[Connect#${connectionId}] WebSocket连接已关闭: code=${event.code}, reason=${event.reason}, authState=${this.authState}, duration=${duration}ms`);
         this.isConnected = false;
         
         // 停止应用层心跳
         this.stopHeartbeat();
+        
+        // 停止健康检查器，避免与重连逻辑竞争
+        if (this.healthChecker) {
+          this.healthChecker.stop();
+        }
         
         // 清除认证超时
         if (this.authTimeout) {
           clearTimeout(this.authTimeout);
           this.authTimeout = null;
         }
+        
+        // 广播状态更新
+        this.broadcastStatusUpdate();
         
         // 如果是认证失败导致的关闭（4001-4004 是自定义认证错误码），不自动重连
         const isAuthError = event.code >= 4001 && event.code <= 4010;
@@ -624,10 +702,22 @@ class BrowserControl {
       };
       
       this.ws.onerror = (error) => {
+        // === 连接实例检查 ===
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onerror 被忽略（已被连接 #${this._currentConnectionId} 取代）`);
+          return;
+        }
+        
         const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
-        console.error(`WebSocket错误: authState=${this.authState}, duration=${duration}ms`, error);
+        console.error(`[Connect#${connectionId}] WebSocket错误: authState=${this.authState}, duration=${duration}ms`, error);
         this.isConnected = false;
         this.stopHeartbeat();
+        
+        // 停止健康检查器，避免与重连逻辑竞争
+        if (this.healthChecker) {
+          this.healthChecker.stop();
+        }
+        
         this.wsConsecutiveFailures = (this.wsConsecutiveFailures || 0) + 1;
         
         console.log(`[WebSocket] 连续失败次数: ${this.wsConsecutiveFailures}/${this.sseFallbackThreshold || 5}`);
@@ -1082,6 +1172,39 @@ class BrowserControl {
           // 应用层心跳响应
           this.lastPongTime = Date.now();
           return;
+          
+        case 'session_expired':
+          // 服务端通知会话已过期，需要重新认证
+          console.warn('[Auth] 收到服务端会话过期通知:', message.reason);
+          this.authState = 'disconnected';
+          this.sessionId = null;
+          this.sessionExpiresAt = null;
+          // 广播状态更新让 Popup 知道
+          this.broadcastStatusUpdate();
+          // 重新连接以进行认证
+          this.reconnectWithNewSettings();
+          return;
+          
+        case 'session_expiring':
+          // 服务端通知会话即将过期，提前刷新
+          console.warn(`[Auth] 会话即将过期（${message.expiresIn}秒后），提前刷新`);
+          this.refreshSession();
+          return;
+          
+        case 'error':
+          // 处理服务端错误消息
+          if (message.code === 'SESSION_EXPIRED') {
+            console.warn('[Auth] 请求被拒绝：会话已过期，准备重新连接');
+            this.authState = 'disconnected';
+            this.sessionId = null;
+            this.sessionExpiresAt = null;
+            this.broadcastStatusUpdate();
+            this.reconnectWithNewSettings();
+            return;
+          }
+          // 其他错误类型走默认处理
+          console.warn('[ServerError]', message.code, message.message);
+          break;
       }
       
       // 检查是否需要认证但未认证
@@ -3142,6 +3265,13 @@ class BrowserControl {
 
   /**
    * 使用新设置重新连接
+   * 
+   * 注意：旧连接的事件处理器必须被显式解除绑定，
+   * 因为 ws.close() 是异步的，旧 socket 的 onclose 会在新连接建立后触发，
+   * 可能错误地将 isConnected 设为 false 或触发额外重连。
+   * 
+   * Fix: 使用 _cleanupSocket() 显式清理旧连接的所有事件绑定。
+   * 同时 connect() 中的 connectionId 检查提供了双重保护。
    */
   async reconnectWithNewSettings() {
     try {
@@ -3150,9 +3280,18 @@ class BrowserControl {
       // 停止当前的重连尝试
       this.stopAutoReconnect();
       
-      // 关闭现有连接
+      // 停止心跳（属于旧连接）
+      this.stopHeartbeat();
+      
+      // 清除认证超时（属于旧连接）
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      
+      // 显式清理旧连接：解除所有事件绑定后关闭，防止异步 onclose 干扰新连接
       if (this.ws) {
-        this.ws.close();
+        this._cleanupSocket(this.ws, 1000, 'Reconnecting with new settings');
         this.ws = null;
       }
       
