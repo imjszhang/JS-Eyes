@@ -1,6 +1,6 @@
 {
   "name": "popup",
-  "version": "1.3.3",
+  "version": "1.3.5",
   "description": "",
   "main": "popup.js",
   "scripts": {

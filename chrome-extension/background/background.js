@@ -69,6 +69,10 @@ const EXTENSION_CONFIG = {
     ],
     sensitiveActions: ['execute_script', 'get_cookies', 'get_cookies_by_domain'],
     requestTimeout: 60000,
+    rateLimit: {
+      maxRequestsPerSecond: 10,
+      blockDuration: 5000
+    },
     // 认证配置
     auth: {
       storageKey: 'auth_secret_key',
@@ -700,6 +704,11 @@ class BrowserControl {
     this.tabDataDebounceTimer = null;
     this.tabDataDebounceMs = 500;    // 防抖间隔 500ms
     
+    // 连接实例追踪（防止孤儿连接干扰）
+    this._connectionCounter = 0;
+    this._currentConnectionId = 0;
+    this._connectDebounceTimer = null;
+    
     // 稳定性工具
     this.rateLimiter = null;
     this.deduplicator = null;
@@ -881,16 +890,30 @@ class BrowserControl {
   
   /**
    * 启动定期清理任务
+   * 每 10 秒清理过期请求和缓存
    */
   startCleanupTask() {
     setInterval(() => {
-      if (this.deduplicator) {
-        this.deduplicator.cleanup();
+      try {
+        if (this.deduplicator) {
+          this.deduplicator.cleanup();
+        }
+        if (this.queueManager) {
+          const expiredRequests = this.queueManager.cleanupExpired();
+          // 为过期的请求发送超时响应
+          for (const expired of expiredRequests) {
+            this.sendMessage({
+              type: 'error',
+              message: `请求超时: ${expired.type}`,
+              requestId: expired.requestId,
+              code: 'TIMEOUT'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[CleanupTask] 清理任务出错:', error);
       }
-      if (this.queueManager) {
-        this.queueManager.cleanupExpired();
-      }
-    }, 60000);
+    }, 10000); // 每 10 秒执行一次
   }
   
   /**
@@ -1031,6 +1054,28 @@ class BrowserControl {
   }
 
   /**
+   * 清理指定的 WebSocket 连接
+   * 解除所有事件绑定并关闭连接，防止孤儿连接事件干扰新连接
+   * @param {WebSocket} ws - 要清理的 WebSocket 实例
+   * @param {number} [code=1000] - 关闭代码
+   * @param {string} [reason=''] - 关闭原因
+   */
+  _cleanupSocket(ws, code = 1000, reason = '') {
+    if (!ws) return;
+    try {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(code, reason);
+      }
+    } catch (e) {
+      console.warn('[BrowserControl] 清理旧连接时出错:', e.message);
+    }
+  }
+
+  /**
    * 计算 HMAC-SHA256
    * 使用 Web Crypto API 实现
    * 
@@ -1069,27 +1114,54 @@ class BrowserControl {
 
   /**
    * 连接到WebSocket服务器
+   * 
+   * 使用连接实例追踪（connectionId）确保：
+   * - 旧连接的异步事件（onclose/onerror）不会干扰新连接的状态
+   * - 不会因为并发调用产生多个活跃连接（孤儿连接）
    */
   connect() {
+    // === 防重入保护：500ms 内的重复调用只执行最后一次 ===
+    if (this._connectDebounceTimer) {
+      clearTimeout(this._connectDebounceTimer);
+    }
+    this._connectDebounceTimer = setTimeout(() => {
+      this._connectDebounceTimer = null;
+    }, 500);
+
     try {
-      console.log(`正在连接到 ${this.serverUrl}...`);
+      const connectionId = ++this._connectionCounter;
+      this._currentConnectionId = connectionId;
       
-      // 重置认证状态
-      this.authState = 'disconnected';
-      this.sessionId = null;
-      this.pendingChallenge = null;
-      this.sessionExpiresAt = null;
+      console.log(`[Connect#${connectionId}] 正在连接到 ${this.serverUrl}...`);
       
-      // 清除认证超时
+      // === 清理旧连接：解除事件绑定 + 关闭 ===
+      if (this.ws) {
+        console.log(`[Connect#${connectionId}] 清理旧连接`);
+        this._cleanupSocket(this.ws, 1000, 'New connection initiated');
+        this.ws = null;
+      }
+      
+      this.stopHeartbeat();
+      
       if (this.authTimeout) {
         clearTimeout(this.authTimeout);
         this.authTimeout = null;
       }
       
+      this.authState = 'disconnected';
+      this.sessionId = null;
+      this.pendingChallenge = null;
+      this.sessionExpiresAt = null;
+      
       this.ws = new WebSocket(this.serverUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket连接已建立，等待服务器认证挑战...');
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onopen 被忽略（已被连接 #${this._currentConnectionId} 取代）`);
+          return;
+        }
+        
+        console.log(`[Connect#${connectionId}] WebSocket连接已建立，等待服务器认证挑战...`);
         this.isConnected = true;
         this.isReconnecting = false;
         this.authState = 'authenticating';
@@ -1122,6 +1194,8 @@ class BrowserControl {
         // 设置认证超时（如果服务器不发送 challenge，可能是旧版服务器）
         const authTimeoutMs = this.securityConfig.auth?.authTimeout || 30000;
         this.authTimeout = setTimeout(() => {
+          if (connectionId !== this._currentConnectionId) return;
+          
           if (this.authState === 'authenticating' && !this.pendingChallenge) {
             // 服务器没有发送 challenge，按旧版逻辑处理（向后兼容）
             console.log('服务器未发送认证挑战，按旧版协议处理');
@@ -1142,22 +1216,32 @@ class BrowserControl {
       };
       
       this.ws.onmessage = (event) => {
+        if (connectionId !== this._currentConnectionId) return;
         this.handleMessage(event.data);
       };
       
       this.ws.onclose = (event) => {
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onclose 被忽略（已被连接 #${this._currentConnectionId} 取代），code=${event.code}`);
+          return;
+        }
+        
         const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
-        console.log(`WebSocket连接已关闭: code=${event.code}, reason=${event.reason}, authState=${this.authState}, duration=${duration}ms`);
+        console.log(`[Connect#${connectionId}] WebSocket连接已关闭: code=${event.code}, reason=${event.reason}, authState=${this.authState}, duration=${duration}ms`);
         this.isConnected = false;
         
-        // 停止应用层心跳
         this.stopHeartbeat();
         
-        // 清除认证超时
+        if (this.healthChecker) {
+          this.healthChecker.stop();
+        }
+        
         if (this.authTimeout) {
           clearTimeout(this.authTimeout);
           this.authTimeout = null;
         }
+        
+        this.broadcastStatusUpdate();
         
         // 如果是认证失败导致的关闭（4001-4004 是自定义认证错误码），不自动重连
         const isAuthError = event.code >= 4001 && event.code <= 4010;
@@ -1179,10 +1263,20 @@ class BrowserControl {
       };
       
       this.ws.onerror = (error) => {
+        if (connectionId !== this._currentConnectionId) {
+          console.log(`[Connect#${connectionId}] onerror 被忽略（已被连接 #${this._currentConnectionId} 取代）`);
+          return;
+        }
+        
         const duration = this.connectStartTime ? Date.now() - this.connectStartTime : 0;
-        console.error(`WebSocket错误: authState=${this.authState}, duration=${duration}ms`, error);
+        console.error(`[Connect#${connectionId}] WebSocket错误: authState=${this.authState}, duration=${duration}ms`, error);
         this.isConnected = false;
         this.stopHeartbeat();
+        
+        if (this.healthChecker) {
+          this.healthChecker.stop();
+        }
+        
         this.wsConsecutiveFailures = (this.wsConsecutiveFailures || 0) + 1;
         
         console.log(`[WebSocket] 连续失败次数: ${this.wsConsecutiveFailures}/${this.sseFallbackThreshold || 5}`);
@@ -1537,18 +1631,90 @@ class BrowserControl {
           // 应用层心跳响应
           this.lastPongTime = Date.now();
           return;
+          
+        case 'session_expired':
+          // 服务端通知会话已过期，需要重新认证
+          console.warn('[Auth] 收到服务端会话过期通知:', message.reason);
+          this.authState = 'disconnected';
+          this.sessionId = null;
+          this.sessionExpiresAt = null;
+          this.broadcastStatusUpdate();
+          this.reconnectWithNewSettings();
+          return;
+          
+        case 'session_expiring':
+          // 服务端通知会话即将过期，提前刷新
+          console.warn(`[Auth] 会话即将过期（${message.expiresIn}秒后），提前刷新`);
+          this.refreshSession();
+          return;
+          
+        case 'error':
+          // 处理服务端错误消息
+          if (message.code === 'SESSION_EXPIRED') {
+            console.warn('[Auth] 请求被拒绝：会话已过期，准备重新连接');
+            this.authState = 'disconnected';
+            this.sessionId = null;
+            this.sessionExpiresAt = null;
+            this.broadcastStatusUpdate();
+            this.reconnectWithNewSettings();
+            return;
+          }
+          console.warn('[ServerError]', message.code, message.message);
+          break;
       }
       
-      // 检查是否需要认证但未认证
       if (this.authState === 'authenticating') {
         console.warn('认证中，暂时忽略业务消息:', message.type);
         return;
       }
       
-      // 处理业务消息
-      // 如果是新协议格式（包含 action 字段），提取实际操作
       const actionType = message.action || message.type;
       const payload = message.payload || message;
+      const requestId = payload.requestId || message.requestId;
+      
+      // === 保护层检查 ===
+      
+      if (this.rateLimiter) {
+        const rateLimitResult = this.rateLimiter.check();
+        if (!rateLimitResult.allowed) {
+          console.warn(`[RateLimit] 请求被限制: ${actionType}`, rateLimitResult.reason);
+          this.sendMessage({
+            type: 'error',
+            message: rateLimitResult.reason,
+            requestId: requestId,
+            code: 'RATE_LIMITED',
+            retryAfter: rateLimitResult.retryAfter
+          });
+          return;
+        }
+      }
+      
+      if (this.deduplicator && requestId) {
+        const dedupResult = this.deduplicator.checkRequest(requestId);
+        if (dedupResult.isDuplicate) {
+          console.warn(`[Dedup] 重复请求被跳过: ${requestId}`);
+          return;
+        }
+        this.deduplicator.markProcessing(requestId);
+      }
+      
+      if (this.queueManager && requestId) {
+        const queueResult = this.queueManager.add(requestId, actionType, { tabId: payload.tabId });
+        if (!queueResult.accepted) {
+          console.warn(`[Queue] 队列已满，请求被拒绝: ${requestId}`);
+          this.sendMessage({
+            type: 'error',
+            message: queueResult.reason,
+            requestId: requestId,
+            code: 'QUEUE_FULL',
+            queueSize: queueResult.queueSize
+          });
+          if (this.deduplicator) {
+            this.deduplicator.markCompleted(requestId);
+          }
+          return;
+        }
+      }
       
       switch (actionType) {
         case 'open_url':
@@ -1593,12 +1759,11 @@ class BrowserControl {
           
         default:
           console.warn('未知消息类型:', actionType);
-          // 清理队列和去重标记
-          if (this.queueManager && payload.requestId) {
-            this.queueManager.remove(payload.requestId);
+          if (this.queueManager && requestId) {
+            this.queueManager.remove(requestId);
           }
-          if (this.deduplicator && payload.requestId) {
-            this.deduplicator.markCompleted(payload.requestId);
+          if (this.deduplicator && requestId) {
+            this.deduplicator.markCompleted(requestId);
           }
           break;
       }
@@ -1758,6 +1923,7 @@ class BrowserControl {
   
   /**
    * 应用服务端配置到本地
+   * @param {Object} serverConfig - 服务端配置
    */
   applyServerConfig(serverConfig) {
     if (serverConfig.request?.defaultTimeout) {
@@ -1775,13 +1941,15 @@ class BrowserControl {
       console.log(`[ConfigSync] 请求超时已更新: ${newTimeout}ms`);
     }
     
-    if (serverConfig.rateLimit) {
-      const rateConfig = serverConfig.rateLimit;
-      
-      if (this.rateLimiter && rateConfig.callbackQueryLimit) {
-        const perSecond = Math.ceil(rateConfig.callbackQueryLimit / 60);
-        this.rateLimiter.maxRequests = perSecond;
-        console.log(`[ConfigSync] 限流已更新: ${perSecond} 次/秒`);
+    // 同步限流配置：优先使用 extensionRateLimit（扩展命令处理专用），
+    // 不再使用 callbackQueryLimit（那是 HTTP 回调查询限流，不适用于扩展命令处理）
+    if (serverConfig.extensionRateLimit) {
+      if (this.rateLimiter && serverConfig.extensionRateLimit.maxRequestsPerSecond) {
+        this.rateLimiter.maxRequests = serverConfig.extensionRateLimit.maxRequestsPerSecond;
+        console.log(`[ConfigSync] 限流已更新: ${this.rateLimiter.maxRequests} 次/秒`);
+      }
+      if (this.rateLimiter && serverConfig.extensionRateLimit.blockDuration) {
+        this.rateLimiter.blockDuration = serverConfig.extensionRateLimit.blockDuration;
       }
     }
     
@@ -1803,40 +1971,74 @@ class BrowserControl {
 
   /**
    * 处理打开URL请求
+   * 带超时保护和标签页去重
    */
   async handleOpenUrl(message) {
+    const { url, tabId, windowId, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { url, tabId, windowId, requestId } = message;
-      
       let resultTabId;
+      let isExistingTab = false;
       
-      if (tabId) {
-        // 更新现有标签页
-        await chrome.tabs.update(parseInt(tabId), { url: url });
-        resultTabId = tabId;
-      } else {
-        // 创建新标签页
-        const createProperties = { url: url };
-        if (windowId) {
-          createProperties.windowId = parseInt(windowId);
+      if (!tabId && this.deduplicator) {
+        const existingCheck = this.deduplicator.checkUrlTab(url);
+        if (existingCheck.hasExisting) {
+          try {
+            const existingTab = await chrome.tabs.get(existingCheck.tabId);
+            if (existingTab && existingTab.url === url) {
+              console.log(`[OpenUrl] 使用已存在的标签页 ${existingCheck.tabId} (URL: ${url})`);
+              resultTabId = existingCheck.tabId;
+              isExistingTab = true;
+            }
+          } catch (e) {
+            // 标签页不存在，继续创建新的
+          }
         }
-        
-        const tab = await chrome.tabs.create(createProperties);
-        resultTabId = tab.id;
       }
       
-      // 等待页面加载完成
-      await this.waitForTabLoad(resultTabId);
+      if (!resultTabId) {
+        if (tabId) {
+          await chrome.tabs.update(parseInt(tabId), { url: url });
+          resultTabId = tabId;
+        } else {
+          const createProperties = { url: url };
+          if (windowId) {
+            createProperties.windowId = parseInt(windowId);
+          }
+          
+          const tab = await chrome.tabs.create(createProperties);
+          resultTabId = tab.id;
+          
+          if (this.deduplicator) {
+            this.deduplicator.cacheUrlTab(url, resultTabId);
+          }
+        }
+      }
       
-      // 获取cookies
-      const cookies = await this.getTabCookies(resultTabId);
+      if (!isExistingTab) {
+        await this.withTimeout(
+          this.waitForTabLoad(resultTabId),
+          timeout,
+          '页面加载超时'
+        );
+      }
       
-      // 发送完成响应
+      const cookies = await this.withTimeout(
+        this.getTabCookies(resultTabId),
+        10000,
+        '获取Cookies超时'
+      ).catch(err => {
+        console.warn('获取Cookies失败:', err.message);
+        return [];
+      });
+      
       this.sendMessage({
         type: 'open_url_complete',
         tabId: resultTabId,
         url: url,
         cookies: cookies,
+        isExistingTab: isExistingTab,
         requestId: requestId,
         timestamp: new Date().toISOString()
       });
@@ -1846,8 +2048,16 @@ class BrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'OPEN_URL_ERROR'
       });
+    } finally {
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -1879,18 +2089,23 @@ class BrowserControl {
 
   /**
    * 处理获取HTML请求
+   * 带超时保护
    */
   async handleGetHtml(message) {
+    const { tabId, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { tabId, requestId } = message;
+      const results = await this.withTimeout(
+        chrome.scripting.executeScript({
+          target: { tabId: parseInt(tabId) },
+          func: () => document.documentElement.outerHTML
+        }),
+        timeout,
+        '获取HTML超时'
+      );
       
-      // 通过content script获取HTML
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: parseInt(tabId) },
-        func: () => document.documentElement.outerHTML
-      });
-      
-      const html = results[0].result || '';
+      const html = results[0]?.result || '';
       
       // 如果HTML太大，分块发送
       if (html.length > 100000) { // 100KB
@@ -1910,8 +2125,16 @@ class BrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'HTML_ERROR'
       });
+    } finally {
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -1957,18 +2180,16 @@ class BrowserControl {
 
   /**
    * 处理执行脚本请求
+   * 带超时保护
    */
   async handleExecuteScript(message) {
+    const { tabId, code, requestId } = message;
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
-      const { tabId, code, requestId } = message;
-      
-      // Manifest V3 需要使用函数对象，不能直接传递代码字符串
-      // 创建一个包装函数来执行代码（支持 Promise 等待）
       const executeCode = async function(scriptCode) {
         try {
-          // 使用 eval 执行代码（在页面上下文中）
           const result = eval(scriptCode);
-          // 检测返回值是否为 Promise（thenable），如果是则等待
           if (result && typeof result.then === 'function') {
             return await result;
           }
@@ -1978,11 +2199,15 @@ class BrowserControl {
         }
       };
       
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: parseInt(tabId) },
-        func: executeCode,
-        args: [code]
-      });
+      const results = await this.withTimeout(
+        chrome.scripting.executeScript({
+          target: { tabId: parseInt(tabId) },
+          func: executeCode,
+          args: [code]
+        }),
+        timeout,
+        '脚本执行超时'
+      );
       
       this.sendMessage({
         type: 'execute_script_complete',
@@ -1997,8 +2222,16 @@ class BrowserControl {
       this.sendMessage({
         type: 'error',
         message: error.message,
-        requestId: message.requestId
+        requestId: requestId,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'SCRIPT_ERROR'
       });
+    } finally {
+      if (this.queueManager && requestId) {
+        this.queueManager.remove(requestId);
+      }
+      if (this.deduplicator && requestId) {
+        this.deduplicator.markCompleted(requestId);
+      }
     }
   }
 
@@ -3016,8 +3249,11 @@ class BrowserControl {
 
   /**
    * 处理执行脚本请求（通过 Content Script 中转）
+   * 带超时保护
    */
   async handleExecuteScriptRequest(payload, sender) {
+    const timeout = this.securityConfig.requestTimeout || 30000;
+    
     try {
       const { tabId, code } = payload || {};
       
@@ -3025,14 +3261,12 @@ class BrowserControl {
         return { success: false, error: '缺少 code 参数' };
       }
       
-      // 如果没有指定 tabId，使用发送者的 tabId
       const targetTabId = tabId ? parseInt(tabId) : sender.tab?.id;
       
       if (!targetTabId) {
         return { success: false, error: '无法确定目标标签页' };
       }
       
-      // 执行脚本
       const executeCode = async function(scriptCode) {
         try {
           const result = eval(scriptCode);
@@ -3045,18 +3279,26 @@ class BrowserControl {
         }
       };
       
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: targetTabId },
-        func: executeCode,
-        args: [code]
-      });
+      const results = await this.withTimeout(
+        chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          func: executeCode,
+          args: [code]
+        }),
+        timeout,
+        '脚本执行超时'
+      );
       
       return { 
         success: true, 
         data: { result: results[0]?.result, tabId: targetTabId }
       };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message,
+        code: error.message.includes('超时') ? 'TIMEOUT' : 'SCRIPT_ERROR'
+      };
     }
   }
 
@@ -3431,17 +3673,25 @@ class BrowserControl {
 
   /**
    * 使用新设置重新连接
+   * 
+   * 注意：旧连接的事件处理器必须被显式解除绑定，
+   * 因为 ws.close() 是异步的，旧 socket 的 onclose 会在新连接建立后触发，
+   * 可能错误地将 isConnected 设为 false 或触发额外重连。
    */
   async reconnectWithNewSettings() {
     try {
       console.log('正在使用新设置重新连接...');
       
-      // 停止当前的重连尝试
       this.stopAutoReconnect();
+      this.stopHeartbeat();
       
-      // 关闭现有连接
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      
       if (this.ws) {
-        this.ws.close();
+        this._cleanupSocket(this.ws, 1000, 'Reconnecting with new settings');
         this.ws = null;
       }
       

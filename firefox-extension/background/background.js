@@ -953,16 +953,15 @@ class BrowserControl {
       console.log(`[ConfigSync] 请求超时已更新: ${newTimeout}ms`);
     }
     
-    // 同步限流配置
-    if (serverConfig.rateLimit) {
-      const rateConfig = serverConfig.rateLimit;
-      
-      // 更新本地限流器
-      if (this.rateLimiter && rateConfig.callbackQueryLimit) {
-        // 转换为每秒限制（服务端是每分钟）
-        const perSecond = Math.ceil(rateConfig.callbackQueryLimit / 60);
-        this.rateLimiter.maxRequests = perSecond;
-        console.log(`[ConfigSync] 限流已更新: ${perSecond} 次/秒`);
+    // 同步限流配置：优先使用 extensionRateLimit（扩展命令处理专用），
+    // 不再使用 callbackQueryLimit（那是 HTTP 回调查询限流，不适用于扩展命令处理）
+    if (serverConfig.extensionRateLimit) {
+      if (this.rateLimiter && serverConfig.extensionRateLimit.maxRequestsPerSecond) {
+        this.rateLimiter.maxRequests = serverConfig.extensionRateLimit.maxRequestsPerSecond;
+        console.log(`[ConfigSync] 限流已更新: ${this.rateLimiter.maxRequests} 次/秒`);
+      }
+      if (this.rateLimiter && serverConfig.extensionRateLimit.blockDuration) {
+        this.rateLimiter.blockDuration = serverConfig.extensionRateLimit.blockDuration;
       }
     }
     

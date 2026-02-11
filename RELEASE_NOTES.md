@@ -1,5 +1,39 @@
 # Release Notes
 
+## v1.3.5
+
+### Changes
+- Synced Chrome extension with Firefox extension feature parity
+- Connection orphan protection: connection instance tracking (`connectionId`) and `_cleanupSocket` for proper cleanup
+- Message handling: added rate limit, deduplication, and queue checks before processing requests
+- Session management: `session_expired` and `session_expiring` handling for session refresh
+- Server config: use `extensionRateLimit` instead of `callbackQueryLimit` for rate limit sync
+- Cleanup task: send timeout response for expired requests, run every 10 seconds
+- `handleOpenUrl`: URL deduplication, timeout protection, URL-tab cache
+- `handleGetHtml` / `handleExecuteScript`: timeout protection via `withTimeout`
+- `reconnectWithNewSettings`: use `_cleanupSocket` for proper connection cleanup
+- Stop health checker on WebSocket close/error
+
+### Downloads
+- [Chrome Extension](https://github.com/imjszhang/js-eyes/releases/download/v1.3.5/js-eyes-chrome-v1.3.5.zip)
+- [Firefox Extension](https://github.com/imjszhang/js-eyes/releases/download/v1.3.5/js-eyes-firefox-v1.3.5.xpi)
+
+### Installation Instructions
+
+#### Chrome/Edge
+1. Download `js-eyes-chrome-v1.3.5.zip`
+2. Extract the ZIP file
+3. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`)
+4. Enable "Developer mode" in the top right
+5. Click "Load unpacked"
+6. Select the extracted folder
+
+#### Firefox
+1. Download `js-eyes-firefox-v1.3.5.xpi`
+2. Open Firefox browser
+3. Drag and drop the `.xpi` file into the browser window
+4. Confirm installation
+
 ## v1.3.4
 
 ### Changes
