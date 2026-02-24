@@ -1,5 +1,40 @@
 # Release Notes
 
+## v1.4.0
+
+### Changes
+- **Auto Server Discovery**: Extension auto-detects server type, capabilities, and WebSocket endpoint from a single HTTP URL via `/api/browser/config`
+- **Unified Server URL**: Single `SERVER_URL` replaces separate `WEBSOCKET_SERVER_URL` and `HTTP_SERVER_URL` — WebSocket address is auto-discovered
+- **Adaptive Authentication**: Auth flow is now message-driven, reacting to server's first message instead of guessing with a timeout
+- **Multi-server Support**: Full support for both lightweight (`js-eyes/server`) and full-featured (`deepseek-cowork`) server backends
+- **Built-in Server**: New lightweight Node.js server (`server/`) with HTTP + WebSocket on a single port, browser client management, and tab tracking
+- **Server Type Display**: Popup UI now shows detected server name/version and supported capabilities
+- **Tolerant Health Check**: `HealthChecker` accepts HTTP 503 as valid "critical" response, supports multiple response formats
+- **CLI Toolchain**: New `cli/` module with build, bump, commit, sync, and release commands (cross-platform, i18n support)
+- **Landing Page**: New project site built from `src/` to `docs/` with i18n support
+- **Test Suite**: Added unit tests for server WebSocket handler and Firefox extension utilities
+- **Bug Fixes**: Fixed SSE false activation, health check 503 handling, and port mismatch issues
+
+### Downloads
+- [Chrome Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.4.0/js-eyes-chrome-v1.4.0.zip)
+- [Firefox Extension](https://github.com/imjszhang/JS-Eyes/releases/download/v1.4.0/js-eyes-firefox-v1.4.0.xpi)
+
+### Installation Instructions
+
+#### Chrome/Edge
+1. Download `js-eyes-chrome-v1.4.0.zip`
+2. Extract the ZIP file
+3. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`)
+4. Enable "Developer mode" in the top right
+5. Click "Load unpacked"
+6. Select the extracted folder
+
+#### Firefox
+1. Download `js-eyes-firefox-v1.4.0.xpi`
+2. Open Firefox browser
+3. Drag and drop the `.xpi` file into the browser window
+4. Confirm installation
+
 ## v1.3.5
 
 ### Changes
