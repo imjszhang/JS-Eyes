@@ -105,7 +105,7 @@ function buildSite(t, options = {}) {
     }
 
     if (clean && fs.existsSync(DOCS_DIR)) {
-        const keep = ['README_CN.md'];
+        const keep = ['README_CN.md', 'CNAME'];
         const entries = fs.readdirSync(DOCS_DIR);
         for (const entry of entries) {
             if (keep.includes(entry)) continue;
