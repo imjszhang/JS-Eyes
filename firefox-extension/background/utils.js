@@ -405,7 +405,7 @@ class HealthChecker {
    * @param {number} config.timeout - 请求超时时间（毫秒）
    */
   constructor(config = {}) {
-    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.httpServerUrl = config.httpServerUrl || '';
     this.endpoint = config.endpoint || '/api/browser/health';
     this.interval = config.interval || 30000;
     this.criticalCooldown = config.criticalCooldown || 60000;
@@ -473,7 +473,8 @@ class HealthChecker {
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
+      // 503 是完整版服务器在 critical 状态时返回的有效状态码
+      if (!response.ok && response.status !== 503) {
         throw new Error(`HTTP ${response.status}`);
       }
       
@@ -483,7 +484,14 @@ class HealthChecker {
       this.lastHealthData = data;
       
       const previousStatus = this.currentStatus;
-      this.currentStatus = data.status || 'unknown';
+      // 宽容解析：支持 { status: 'healthy' }, { ok: true }, 及无 status 字段
+      if (data.status) {
+        this.currentStatus = data.status;
+      } else if (data.ok !== undefined) {
+        this.currentStatus = data.ok ? 'healthy' : 'critical';
+      } else {
+        this.currentStatus = response.status === 200 ? 'healthy' : 'critical';
+      }
       
       // 根据状态处理熔断
       if (this.currentStatus === 'critical') {
@@ -613,7 +621,7 @@ class SSEClient {
    * @param {number} config.maxReconnectAttempts - 最大重连次数
    */
   constructor(config = {}) {
-    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.httpServerUrl = config.httpServerUrl || '';
     this.endpoint = config.endpoint || '/api/browser/events';
     this.reconnectInterval = config.reconnectInterval || 5000;
     this.maxReconnectAttempts = config.maxReconnectAttempts || 10;

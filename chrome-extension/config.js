@@ -5,39 +5,32 @@
  * 这个配置文件提供了默认的服务器地址配置
  * 
  * 生成时间: 2025-09-19T00:40:37+08:00
- * 更新时间: 2026-01-26 (添加安全配置)
+ * 更新时间: 2026-02-24 (多服务器适配优化)
  */
 
 // 默认配置
 const DEFAULT_CONFIG = {
-  // WebSocket 服务器地址（用于与 browserControlServer 通信）
-  // 支持多个地址，扩展会自动尝试连接
+  // 服务器入口地址（唯一需要配置的地址）
+  // 扩展会自动通过能力探测获取 WebSocket 地址和 HTTP API 地址
+  // 支持 http:// 或 ws:// 协议
+  SERVER_URL: 'http://localhost:18080',
+
+  // 能力探测配置
+  DISCOVERY: {
+    enabled: true,
+    configEndpoint: '/api/browser/config',
+    timeout: 5000,
+    fallbackWsFromHttp: true
+  },
+
+  // WebSocket 服务器地址列表（可选 fallback，探测失败时使用）
   WEBSOCKET_SERVER_URLS: [
-    // 本地开发环境
-    'ws://localhost:8080',
-    
-    // Docker本地部署 (使用默认域名)
-    'ws://example.local:8080',
-    'wss://example.local:8080',
-    
-    // Docker部署 (通过WebSocket子域名)
+    'ws://localhost:18080',
+    'ws://example.local:18080',
+    'wss://example.local:18080',
     'ws://ws.example.local',
-    'wss://ws.example.local',
-    
-    // Docker部署 (直接通过主域名的8080端口)
-    'ws://example.local:8080',
-    'wss://example.local:8080',
-    
-    // 生产环境示例 (需要根据实际域名调整)
-    // 'wss://ws.yourdomain.com',
-    // 'wss://yourdomain.com:8080'
+    'wss://ws.example.local'
   ],
-  
-  // 主要WebSocket服务器地址（向后兼容）
-  WEBSOCKET_SERVER_URL: 'ws://localhost:8080',
-  
-  // HTTP 服务器地址（备用）
-  HTTP_SERVER_URL: 'http://localhost:3333',
   
   // 连接重试配置
   CONNECTION_RETRY: {
@@ -106,7 +99,7 @@ const DEFAULT_CONFIG = {
     requestTimeout: 60000,
     
     // 认证配置（与服务器安全握手）
-    // 密钥从 chrome.storage.local 读取，通过 Popup 界面设置
+    // 密钥从 storage 读取，通过 Popup 界面设置
     // 不要在此硬编码密钥！
     auth: {
       // 密钥存储键名

@@ -1,0 +1,16 @@
+{
+  "name": "js-eyes-server",
+  "version": "1.0.0",
+  "description": "Minimal standalone server for js-eyes browser extension",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

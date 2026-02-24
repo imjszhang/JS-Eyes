@@ -20,13 +20,21 @@ Provides browser automation capabilities for [DeepSeek Cowork](https://github.co
 
 ## Introduction
 
-JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork). It communicates with the DeepSeek Cowork server via WebSocket to enable browser automation control.
+JS Eyes is a browser extension that communicates with compatible servers via WebSocket to enable browser automation control. It supports multiple server backends through automatic capability discovery.
 
 > 💡 Let AI assistants help you operate your browser: open pages, batch fill forms, extract data, cross-site operations
 
+### Compatible Servers
+
+| Server | Description |
+|--------|-------------|
+| [js-eyes/server](./server) | Lightweight built-in server (HTTP+WS on single port, no auth) |
+| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | Full-featured server (separate WS port, HMAC auth, SSE, rate limiting) |
+
 ## Features
 
-- 🔗 **Real-time WebSocket Communication** - Persistent connection with DeepSeek Cowork server
+- 🔗 **Real-time WebSocket Communication** - Persistent connection with server
+- 🔍 **Auto Server Discovery** - Automatic capability detection and endpoint configuration
 - 📊 **Tab Management** - Auto-sync tab information to server
 - 🎯 **Remote Control** - Remote open/close tabs, execute scripts, etc.
 - 📄 **Content Retrieval** - Get page HTML, text, links, and more
@@ -34,9 +42,9 @@ JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.
 - 💉 **Code Injection** - Support JavaScript execution and CSS injection
 - 📱 **Status Monitoring** - Real-time connection status and extension info
 - 🏥 **Health Check & Circuit Breaker** - Service health monitoring with automatic circuit breaker protection
-- 🔄 **SSE Fallback** - Auto-fallback to SSE when WebSocket connection fails
+- 🔄 **SSE Fallback** - Auto-fallback to SSE when WebSocket connection fails (if server supports it)
 - ⚡ **Rate Limiting & Deduplication** - Request rate limiting and deduplication for stability
-- 🔐 **HMAC Authentication** - Secure server communication with HMAC-SHA256 authentication
+- 🔐 **Adaptive Authentication** - Auto-detects server auth requirements (HMAC-SHA256 or no-auth)
 
 ## Supported Browsers
 
@@ -52,8 +60,8 @@ JS Eyes is the browser extension component for [DeepSeek Cowork](https://github.
 
 Download the latest release from [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest):
 
-- **Chrome/Edge Extension**: `js-eyes-chrome-v1.3.5.zip`
-- **Firefox Extension**: `js-eyes-firefox-v1.3.5.xpi`
+- **Chrome/Edge Extension**: `js-eyes-chrome-v1.4.0.zip`
+- **Firefox Extension**: `js-eyes-firefox-v1.4.0.xpi`
 
 ### Installation from Source
 
@@ -89,16 +97,22 @@ If you have a signed `.xpi` file:
 
 ## Usage
 
-### 1. Start DeepSeek Cowork Server
+### 1. Start a Compatible Server
 
-Ensure DeepSeek Cowork is running with WebSocket server listening on port 8080 (default).
+**Option A** - Built-in lightweight server:
+```bash
+npm run server
+# Starts on http://localhost:18080 (HTTP + WebSocket)
+```
+
+**Option B** - Use [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) full-featured server.
 
 ### 2. Configure Connection
 
 1. Click the extension icon in the browser toolbar
-2. Check connection status in the popup
-3. Modify server address in settings if needed
-4. Click "Connect" to apply settings and connect
+2. Enter the server HTTP address (e.g. `http://localhost:18080`)
+3. Click "Connect" - the extension automatically discovers WebSocket endpoint and server capabilities
+4. For servers with authentication, configure the auth key in security settings
 
 **Auto-Connect Feature:**
 - Extension automatically connects on startup (if enabled)
@@ -108,15 +122,17 @@ Ensure DeepSeek Cowork is running with WebSocket server listening on port 8080 (
 ### 3. Verify Connection
 
 - Status indicator shows "Connected" (green) when successful
+- "Server Type" shows detected server info and capabilities
 - Tab information automatically syncs to server
 - View current tab and statistics in popup
 
 ## Troubleshooting
 
 If you encounter connection issues:
-- Ensure DeepSeek Cowork is running
-- Verify server address and port settings
+- Ensure the server is running
+- Verify server address (use HTTP address, e.g. `http://localhost:18080`)
 - Check browser console for error messages
+- The extension auto-discovers the WebSocket endpoint from the HTTP address
 
 ## Building
 

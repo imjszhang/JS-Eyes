@@ -12,28 +12,20 @@
 
 // 内联配置（因为 Service Worker 不能使用 importScripts）
 const EXTENSION_CONFIG = {
+  SERVER_URL: 'http://localhost:18080',
+  DISCOVERY: {
+    enabled: true,
+    configEndpoint: '/api/browser/config',
+    timeout: 5000,
+    fallbackWsFromHttp: true
+  },
   WEBSOCKET_SERVER_URLS: [
-    // 本地开发环境
-    'ws://localhost:8080',
-    
-    // Docker本地部署 (使用默认域名)
-    'ws://example.local:8080',
-    'wss://example.local:8080',
-    
-    // Docker部署 (通过WebSocket子域名)
+    'ws://localhost:18080',
+    'ws://example.local:18080',
+    'wss://example.local:18080',
     'ws://ws.example.local',
-    'wss://ws.example.local',
-    
-    // Docker部署 (直接通过主域名的8080端口)
-    'ws://example.local:8080',
-    'wss://example.local:8080',
-    
-    // 生产环境示例 (需要根据实际域名调整)
-    // 'wss://ws.yourdomain.com',
-    // 'wss://yourdomain.com:8080'
+    'wss://ws.example.local'
   ],
-  WEBSOCKET_SERVER_URL: 'ws://localhost:8080',
-  HTTP_SERVER_URL: 'http://localhost:3333',
   CONNECTION_RETRY: {
     maxRetries: 5,
     retryDelay: 2000,
@@ -353,7 +345,7 @@ class RequestQueueManager {
  */
 class HealthChecker {
   constructor(config = {}) {
-    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.httpServerUrl = config.httpServerUrl || '';
     this.endpoint = config.endpoint || '/api/browser/health';
     this.interval = config.interval || 30000;
     this.criticalCooldown = config.criticalCooldown || 60000;
@@ -401,7 +393,8 @@ class HealthChecker {
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
+      // 503 是完整版服务器在 critical 状态时返回的有效状态码
+      if (!response.ok && response.status !== 503) {
         throw new Error(`HTTP ${response.status}`);
       }
       
@@ -411,7 +404,14 @@ class HealthChecker {
       this.lastHealthData = data;
       
       const previousStatus = this.currentStatus;
-      this.currentStatus = data.status || 'unknown';
+      // 宽容解析：支持 { status: 'healthy' }, { ok: true }, 及无 status 字段
+      if (data.status) {
+        this.currentStatus = data.status;
+      } else if (data.ok !== undefined) {
+        this.currentStatus = data.ok ? 'healthy' : 'critical';
+      } else {
+        this.currentStatus = response.status === 200 ? 'healthy' : 'critical';
+      }
       
       if (this.currentStatus === 'critical') {
         this.circuitBreakerUntil = Date.now() + this.criticalCooldown;
@@ -512,7 +512,7 @@ class HealthChecker {
  */
 class SSEClient {
   constructor(config = {}) {
-    this.httpServerUrl = config.httpServerUrl || 'http://localhost:3333';
+    this.httpServerUrl = config.httpServerUrl || '';
     this.endpoint = config.endpoint || '/api/browser/events';
     this.reconnectInterval = config.reconnectInterval || 5000;
     this.maxReconnectAttempts = config.maxReconnectAttempts || 10;
@@ -650,14 +650,21 @@ class BrowserControl {
     this.ws = null;
     this.isConnected = false;
     
-    // 默认WebSocket服务器地址列表
+    // 默认服务器入口地址
+    this.defaultServerUrl = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.SERVER_URL)
+      ? EXTENSION_CONFIG.SERVER_URL
+      : 'http://localhost:18080';
+
+    // fallback WS 地址列表
     this.defaultServerUrls = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.WEBSOCKET_SERVER_URLS) 
       ? EXTENSION_CONFIG.WEBSOCKET_SERVER_URLS 
-      : ['ws://localhost:8080', 'ws://example.local:8080'];
+      : ['ws://localhost:18080'];
     
     this.serverUrls = [...this.defaultServerUrls];
     this.currentServerIndex = 0;
-    this.serverUrl = null; // 将在loadSettings中设置
+    this.serverUrl = null; // WS 地址，由 discoverServer() 或 loadSettings 设置
+    this.httpBaseUrl = null; // HTTP 基础地址，由 discoverServer() 设置
+    this.serverCapabilities = null; // 服务器能力标记
     
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
@@ -739,7 +746,10 @@ class BrowserControl {
     // 加载用户设置
     await this.loadSettings();
     
-    // 初始化稳定性工具
+    // 能力探测：获取服务器配置，确定 WS 地址和 HTTP 地址
+    await this.discoverServer();
+    
+    // 初始化稳定性工具（需要 httpBaseUrl，必须在 discoverServer 之后）
     this.initStabilityTools();
     
     // 设置标签页事件监听
@@ -790,12 +800,130 @@ class BrowserControl {
     
     console.log('[BrowserControl] 稳定性工具已初始化');
   }
+
+  /**
+   * 能力探测：请求服务器配置端点，确定 WS/HTTP 地址和服务器能力
+   * 
+   * 支持两种服务器：
+   * - js-eyes/server (轻量版): HTTP+WS 共用端口, 无认证, 无 SSE
+   * - deepseek-cowork browser (完整版): WS 独立端口, 可选认证, 有 SSE
+   */
+  async discoverServer() {
+    const discoveryConfig = (typeof EXTENSION_CONFIG !== 'undefined' && EXTENSION_CONFIG.DISCOVERY)
+      ? EXTENSION_CONFIG.DISCOVERY
+      : { enabled: true, configEndpoint: '/api/browser/config', timeout: 5000, fallbackWsFromHttp: true };
+
+    let baseUrl = this.serverUrl || this.defaultServerUrl;
+
+    if (baseUrl.startsWith('ws://') || baseUrl.startsWith('wss://')) {
+      const httpUrl = baseUrl.replace(/^ws(s?):\/\//, 'http$1://');
+      this.httpBaseUrl = httpUrl;
+    } else {
+      this.httpBaseUrl = baseUrl;
+    }
+
+    if (!discoveryConfig.enabled) {
+      console.log('[Discovery] 能力探测已禁用，使用默认配置');
+      this._applyFallbackDiscovery();
+      return;
+    }
+
+    const configUrl = `${this.httpBaseUrl}${discoveryConfig.configEndpoint}`;
+    console.log(`[Discovery] 正在探测服务器: ${configUrl}`);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), discoveryConfig.timeout);
+
+      const response = await fetch(configUrl, {
+        method: 'GET',
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const config = await response.json();
+      console.log('[Discovery] 服务器配置:', config);
+
+      const wsUrl = config.config?.websocketAddress || config.websocketAddress || config.websocket;
+
+      this.serverCapabilities = {
+        wsUrl: wsUrl || null,
+        httpBaseUrl: this.httpBaseUrl,
+        serverName: config.name || config.config?.name || null,
+        serverVersion: config.version || config.config?.version || null,
+        hasSSE: !!(config.config?.sse || config.sse || config.endpoints?.includes?.('/api/browser/events')),
+        hasServerRateLimit: !!(config.config?.extensionRateLimit || config.extensionRateLimit),
+        hasServerDedup: !!(config.config?.request?.deduplicationWindow || config.request?.deduplicationWindow),
+        hasHealthEndpoint: true,
+        configData: config
+      };
+
+      if (wsUrl) {
+        this.serverUrl = wsUrl;
+        console.log(`[Discovery] WebSocket 地址: ${wsUrl}`);
+      } else if (discoveryConfig.fallbackWsFromHttp) {
+        this.serverUrl = this.httpBaseUrl.replace(/^http(s?):\/\//, 'ws$1://');
+        console.log(`[Discovery] 从 HTTP 推导 WebSocket 地址: ${this.serverUrl}`);
+      }
+
+      console.log('[Discovery] 服务器能力:', this.serverCapabilities);
+
+    } catch (error) {
+      console.warn(`[Discovery] 能力探测失败: ${error.message}，使用 fallback`);
+      this._applyFallbackDiscovery();
+    }
+  }
+
+  /**
+   * 探测失败时的 fallback 逻辑
+   */
+  _applyFallbackDiscovery() {
+    if (this.serverUrl && (this.serverUrl.startsWith('ws://') || this.serverUrl.startsWith('wss://'))) {
+      if (!this.httpBaseUrl) {
+        this.httpBaseUrl = this.serverUrl.replace(/^ws(s?):\/\//, 'http$1://');
+      }
+    } else {
+      this.serverUrl = this.defaultServerUrls[0] || this.defaultServerUrl.replace(/^http(s?):\/\//, 'ws$1://');
+      if (!this.httpBaseUrl) {
+        this.httpBaseUrl = this.defaultServerUrl;
+      }
+    }
+
+    this.serverCapabilities = {
+      wsUrl: this.serverUrl,
+      httpBaseUrl: this.httpBaseUrl,
+      serverName: null,
+      serverVersion: null,
+      hasSSE: false,
+      hasServerRateLimit: false,
+      hasServerDedup: false,
+      hasHealthEndpoint: false,
+      configData: null
+    };
+
+    console.log('[Discovery] Fallback 配置:', {
+      serverUrl: this.serverUrl,
+      httpBaseUrl: this.httpBaseUrl,
+      capabilities: this.serverCapabilities
+    });
+  }
   
   /**
    * 初始化健康检查器
    */
   initHealthChecker() {
-    const healthConfig = EXTENSION_CONFIG.HEALTH_CHECK || { enabled: true };
+    const healthConfig = { ...(EXTENSION_CONFIG.HEALTH_CHECK || { enabled: true }) };
+    
+    // 如果能力探测发现服务器无 health 端点，禁用健康检查
+    if (this.serverCapabilities && !this.serverCapabilities.hasHealthEndpoint) {
+      console.log('[BrowserControl] 服务器不支持健康检查端点，禁用健康检查');
+      healthConfig.enabled = false;
+    }
     
     if (!healthConfig.enabled) {
       console.log('[BrowserControl] 健康检查已禁用');
@@ -803,7 +931,7 @@ class BrowserControl {
       return;
     }
     
-    const httpServerUrl = EXTENSION_CONFIG.HTTP_SERVER_URL || 'http://localhost:3333';
+    const httpServerUrl = this.httpBaseUrl || '';
     
     this.healthChecker = new HealthChecker({
       httpServerUrl: httpServerUrl,
@@ -843,7 +971,14 @@ class BrowserControl {
       return;
     }
     
-    const httpServerUrl = EXTENSION_CONFIG.HTTP_SERVER_URL || 'http://localhost:3333';
+    // 如果能力探测发现服务器不支持 SSE，禁用降级
+    if (this.serverCapabilities && !this.serverCapabilities.hasSSE) {
+      console.log('[BrowserControl] 服务器不支持 SSE，禁用降级');
+      this.sseClient = null;
+      return;
+    }
+    
+    const httpServerUrl = this.httpBaseUrl || '';
     
     this.sseFallbackThreshold = sseConfig.fallbackAfterWsFailures || 5;
     this.wsConsecutiveFailures = 0;
@@ -940,7 +1075,17 @@ class BrowserControl {
       isConnected: this.isConnected,
       connectionMode: this.connectionMode || 'websocket',
       serverUrl: this.serverUrl,
+      httpBaseUrl: this.httpBaseUrl,
       authState: this.authState,
+      
+      serverCapabilities: this.serverCapabilities ? {
+        serverName: this.serverCapabilities.serverName,
+        serverVersion: this.serverCapabilities.serverVersion,
+        hasSSE: this.serverCapabilities.hasSSE,
+        hasServerRateLimit: this.serverCapabilities.hasServerRateLimit,
+        hasHealthEndpoint: this.serverCapabilities.hasHealthEndpoint
+      } : null,
+      
       healthCheck: this.healthChecker ? this.healthChecker.getStatus() : null,
       sseStatus: this.sseClient ? this.sseClient.getStatus() : null,
       queueStatus: this.queueManager ? this.queueManager.getStatus() : null,
@@ -978,12 +1123,12 @@ class BrowserControl {
       const result = await chrome.storage.local.get(['serverUrl', 'autoConnect', authStorageKey]);
       
       if (result.serverUrl) {
-        // 使用用户设置的服务器地址
+        // 使用用户设置的服务器地址（可能是 http:// 或 ws:// 格式）
         this.serverUrl = result.serverUrl;
         console.log('已加载用户设置的服务器地址:', this.serverUrl);
       } else {
-        // 使用默认服务器地址
-        this.serverUrl = this.defaultServerUrls[0];
+        // 使用默认入口地址（discoverServer() 会推导出实际 WS 地址）
+        this.serverUrl = this.defaultServerUrl;
         console.log('使用默认服务器地址:', this.serverUrl);
       }
       
@@ -1008,7 +1153,7 @@ class BrowserControl {
     } catch (error) {
       console.error('加载设置时出错:', error);
       // 使用默认设置
-      this.serverUrl = this.defaultServerUrls[0];
+      this.serverUrl = this.defaultServerUrl;
       this.autoConnect = true;
       this.authSecretKey = null;
     }
@@ -1191,28 +1336,19 @@ class BrowserControl {
         // 广播状态更新
         this.broadcastStatusUpdate();
         
-        // 设置认证超时（如果服务器不发送 challenge，可能是旧版服务器）
-        const authTimeoutMs = this.securityConfig.auth?.authTimeout || 30000;
+        // 安全网超时：60s 后若仍无任何认证消息（auth_challenge 或 auth_result），
+        // 说明服务器未响应，关闭连接。
+        // 正常场景下两种服务器都会在连接后立即发送第一条消息，不会触发此超时。
         this.authTimeout = setTimeout(() => {
           if (connectionId !== this._currentConnectionId) return;
-          
-          if (this.authState === 'authenticating' && !this.pendingChallenge) {
-            // 服务器没有发送 challenge，按旧版逻辑处理（向后兼容）
-            console.log('服务器未发送认证挑战，按旧版协议处理');
-            this.authState = 'authenticated';
-            this.sessionId = null; // 旧版协议无 sessionId
-            
-            // 发送初始化消息（旧版协议）
-            this.sendRawMessage({
-              type: 'init',
-              timestamp: new Date().toISOString(),
-              userAgent: navigator.userAgent
-            });
-            
-            // 立即发送一次标签页数据
-            this.sendTabsData();
+
+          if (this.authState === 'authenticating') {
+            console.error('[Auth] 服务器连接后 60 秒无任何认证消息，关闭连接');
+            if (this.ws) {
+              this.ws.close(1000, 'No auth message received');
+            }
           }
-        }, authTimeoutMs);
+        }, 60000);
       };
       
       this.ws.onmessage = (event) => {
@@ -1392,13 +1528,12 @@ class BrowserControl {
       });
       
       this.authState = 'authenticated';
-      this.sessionId = message.sessionId;
+      this.sessionId = message.sessionId || null;
       
-      // 计算会话过期时间
-      if (message.expiresIn) {
+      // 仅在有 sessionId 时设置会话刷新（完整版服务器）
+      if (message.sessionId && message.expiresIn) {
         this.sessionExpiresAt = Date.now() + (message.expiresIn * 1000);
         
-        // 设置会话刷新定时器（在过期前刷新）
         const refreshBefore = (this.securityConfig.auth?.sessionRefreshBefore || 300) * 1000;
         const refreshDelay = Math.max((message.expiresIn * 1000) - refreshBefore, 60000);
         setTimeout(() => {
@@ -1406,14 +1541,23 @@ class BrowserControl {
         }, refreshDelay);
       }
       
-      // 发送初始化通知（不需要响应，服务端会回复 init_ack）
-      this.sendNotification({
-        type: 'init',
-        payload: {
+      // 发送初始化消息
+      // 轻量版服务器无 session，使用 sendRawMessage；完整版使用 sendNotification
+      if (this.sessionId) {
+        this.sendNotification({
+          type: 'init',
+          payload: {
+            userAgent: navigator.userAgent
+          },
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        this.sendRawMessage({
+          type: 'init',
+          timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent
-        },
-        timestamp: new Date().toISOString()
-      });
+        });
+      }
       
       // 立即发送一次标签页数据
       this.sendTabsData();
@@ -1421,10 +1565,12 @@ class BrowserControl {
       // 启动应用层心跳
       this.startHeartbeat();
       
-      // 注意：syncServerConfig 现在可以由 init_ack 的 serverConfig 替代
-      // 保留 HTTP 调用作为后备，延迟执行以给 init_ack 时间到达
+      // syncServerConfig: 优先使用 discoverServer() 已缓存的数据
+      // 仅在 init_ack 未携带 serverConfig 时作为后备
       setTimeout(() => {
-        if (!this.serverConfig) {
+        if (!this.serverConfig && this.serverCapabilities?.configData) {
+          this.applyServerConfig(this.serverCapabilities.configData);
+        } else if (!this.serverConfig) {
           this.syncServerConfig();
         }
       }, 3000);
@@ -1891,7 +2037,11 @@ class BrowserControl {
    */
   async syncServerConfig() {
     try {
-      const httpServerUrl = EXTENSION_CONFIG.HTTP_SERVER_URL || 'http://localhost:3333';
+      const httpServerUrl = this.httpBaseUrl || '';
+      if (!httpServerUrl) {
+        console.log('[ConfigSync] httpBaseUrl 未设置，跳过配置同步');
+        return;
+      }
       const configUrl = `${httpServerUrl}/api/browser/config`;
       
       console.log('[ConfigSync] 正在从服务端获取配置...');
@@ -3521,7 +3671,8 @@ class BrowserControl {
    * 检查是否应该降级到 SSE
    */
   shouldFallbackToSSE() {
-    if (!this.sseClient) {
+    // 如果服务器不支持 SSE 或客户端不可用，不降级
+    if (!this.serverCapabilities?.hasSSE || !this.sseClient) {
       return false;
     }
     
@@ -3700,6 +3851,17 @@ class BrowserControl {
       
       // 重新加载设置
       await this.loadSettings();
+      
+      // 重新进行能力探测
+      await this.discoverServer();
+      
+      // 更新健康检查器和 SSE 客户端的地址
+      if (this.healthChecker && this.httpBaseUrl) {
+        this.healthChecker.updateConfig({ httpServerUrl: this.httpBaseUrl });
+      }
+      if (this.sseClient && this.httpBaseUrl) {
+        this.sseClient.httpServerUrl = this.httpBaseUrl;
+      }
       
       // 重新连接（不受自动连接设置影响，这是手动触发）
       this.connect();

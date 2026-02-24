@@ -20,13 +20,21 @@
 
 ## 简介
 
-JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的浏览器扩展组件，通过 WebSocket 与 DeepSeek Cowork 服务器通信，实现浏览器自动化控制功能。
+JS Eyes 是一个浏览器自动化控制扩展，通过 WebSocket 与兼容的服务器通信。支持多种服务器后端，通过自动能力探测实现自适应连接。
 
 > 💡 让 AI 助手能够帮你操作浏览器：打开页面、批量填写表单、提取数据、跨站操作
 
+### 兼容的服务器
+
+| 服务器 | 说明 |
+|--------|------|
+| [js-eyes/server](../server) | 内置轻量版服务器（HTTP+WS 共用端口，无认证） |
+| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | 完整版服务器（独立 WS 端口、HMAC 认证、SSE、限流） |
+
 ## 功能特性
 
-- 🔗 **实时 WebSocket 通信** - 与 DeepSeek Cowork 服务器建立持久连接
+- 🔗 **实时 WebSocket 通信** - 与服务器建立持久连接
+- 🔍 **自动服务器探测** - 自动发现服务器能力和端点配置
 - 📊 **标签页管理** - 自动同步标签页信息到服务器
 - 🎯 **远程控制** - 支持远程打开/关闭标签页、执行脚本等
 - 📄 **内容获取** - 获取页面 HTML 内容、文本、链接等信息
@@ -34,9 +42,9 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 - 💉 **代码注入** - 支持 JavaScript 执行和 CSS 注入
 - 📱 **状态监控** - 实时显示连接状态和扩展信息
 - 🏥 **健康检查与熔断** - 服务健康监控，自动熔断保护
-- 🔄 **SSE 降级** - WebSocket 连接失败时自动降级到 SSE
+- 🔄 **SSE 降级** - WebSocket 连接失败时自动降级到 SSE（服务器支持时）
 - ⚡ **限流与去重** - 请求速率限制和去重，提升稳定性
-- 🔐 **HMAC 认证** - 使用 HMAC-SHA256 安全认证与服务器通信
+- 🔐 **自适应认证** - 自动检测服务器认证要求（HMAC-SHA256 或免认证）
 
 ## 支持的浏览器
 
@@ -52,8 +60,8 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 
 从 [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest) 下载最新版本：
 
-- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.3.3.zip`
-- **Firefox 扩展**: `js-eyes-firefox-v1.3.3.xpi`
+- **Chrome/Edge 扩展**: `js-eyes-chrome-v1.4.0.zip`
+- **Firefox 扩展**: `js-eyes-firefox-v1.4.0.xpi`
 
 ### 从源代码安装
 
@@ -89,16 +97,22 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 
 ## 使用说明
 
-### 1. 启动 DeepSeek Cowork 服务器
+### 1. 启动兼容的服务器
 
-确保 DeepSeek Cowork 应用正在运行，WebSocket 服务器默认监听端口 8080。
+**方式 A** — 内置轻量版服务器：
+```bash
+npm run server
+# 在 http://localhost:18080 启动（HTTP + WebSocket）
+```
+
+**方式 B** — 使用 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 完整版服务器。
 
 ### 2. 配置连接
 
 1. 点击浏览器工具栏中的扩展图标
-2. 在弹出窗口中检查连接状态
-3. 如需修改服务器地址，在设置中更改
-4. 点击"Connect"按钮应用新设置并连接
+2. 输入服务器 HTTP 地址（如 `http://localhost:18080`）
+3. 点击"Connect"— 扩展会自动探测 WebSocket 端点和服务器能力
+4. 如果服务器需要认证，在安全设置中配置认证密钥
 
 **自动连接功能：**
 - 扩展启动时会自动尝试连接服务器（如果启用自动连接）
@@ -108,15 +122,17 @@ JS Eyes 是 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 的�
 ### 3. 验证连接
 
 - 扩展成功连接后，状态指示器显示"Connected"（绿色）
+- "Server Type"显示检测到的服务器信息和能力
 - 标签页信息会自动同步到服务器
 - 可在 popup 中查看当前标签页和统计信息
 
 ## 故障排除
 
 如果遇到连接问题：
-- 确认 DeepSeek Cowork 应用正在运行
-- 检查服务器地址和端口设置
+- 确认服务器正在运行
+- 检查服务器地址（使用 HTTP 地址，如 `http://localhost:18080`）
 - 查看浏览器控制台错误信息
+- 扩展会从 HTTP 地址自动探测 WebSocket 端点
 
 ## 构建与发布
 

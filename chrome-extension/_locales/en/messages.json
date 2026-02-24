@@ -177,24 +177,20 @@
   },
 
   "presetLocal": {
-    "message": "Local:8080",
+    "message": "Local:18080",
     "description": "Local preset button"
   },
+  "presetFullServer": {
+    "message": "Full:3000",
+    "description": "Full server preset button"
+  },
   "presetDockerLocal": {
-    "message": "Docker Local:8080",
+    "message": "Docker:18080",
     "description": "Docker local preset button"
   },
   "presetDockerLocalSSL": {
-    "message": "Docker Local:8080 (SSL)",
+    "message": "Docker:18080 (SSL)",
     "description": "Docker local SSL preset button"
-  },
-  "presetDockerWS": {
-    "message": "Docker WS Subdomain",
-    "description": "Docker WS subdomain preset button"
-  },
-  "presetDockerWSS": {
-    "message": "Docker WSS Subdomain",
-    "description": "Docker WSS subdomain preset button"
   },
 
   "logPopupInit": {
@@ -267,7 +263,7 @@
     "placeholders": {
       "url": {
         "content": "$1",
-        "example": "ws://localhost:8080"
+        "example": "http://localhost:18080"
       }
     }
   },
@@ -276,7 +272,7 @@
     "description": "Log: server address empty"
   },
   "logServerInvalidProtocol": {
-    "message": "Server address must start with ws:// or wss://",
+    "message": "Server address must start with http://, https://, ws://, or wss://",
     "description": "Log: invalid server protocol"
   },
   "logServerSaved": {
@@ -285,7 +281,7 @@
     "placeholders": {
       "url": {
         "content": "$1",
-        "example": "ws://localhost:8080"
+        "example": "http://localhost:18080"
       }
     }
   },
@@ -430,7 +426,7 @@
     "description": "Help: connection settings title"
   },
   "helpConnection1": {
-    "message": "Manually enter server address, supports ws:// and wss:// protocols",
+    "message": "Enter server address (http:// or ws://), auto-discovers WebSocket endpoint",
     "description": "Help: connection item 1"
   },
   "helpConnection2": {
@@ -484,23 +480,23 @@
     "description": "Help: address formats title"
   },
   "helpAddress1": {
-    "message": "Local Development: ws://localhost:8080",
+    "message": "Local Lite: http://localhost:18080",
     "description": "Help: address 1"
   },
   "helpAddress2": {
-    "message": "Docker Local: ws://js.local:8080 or wss://js.local:8080",
+    "message": "Local Full: http://localhost:3000",
     "description": "Help: address 2"
   },
   "helpAddress3": {
-    "message": "Docker WebSocket Subdomain: ws://ws.js.local or wss://ws.js.local",
+    "message": "Docker: http://js.local:18080 or https://js.local:18080",
     "description": "Help: address 3"
   },
   "helpAddress4": {
-    "message": "LAN Server: ws://192.168.1.100:8080",
+    "message": "LAN: http://192.168.1.100:18080",
     "description": "Help: address 4"
   },
   "helpAddress5": {
-    "message": "Production: wss://your-domain.com:8080",
+    "message": "Production: https://your-domain.com",
     "description": "Help: address 5"
   },
 

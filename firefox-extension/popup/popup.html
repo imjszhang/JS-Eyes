@@ -32,7 +32,7 @@
         <img src="../icons/icon-16.png" alt="JS" class="w-4 h-4 flex-shrink-0">
         <h1 class="text-sm font-bold text-black uppercase tracking-tight" data-i18n="appTitle">Eyes</h1>
       </div>
-      <div class="text-[10px] font-bold bg-white text-black px-1.5 py-0.5 border-2 border-black shadow-brutal-sm leading-none" id="version-badge">v1.3.5</div>
+      <div class="text-[10px] font-bold bg-white text-black px-1.5 py-0.5 border-2 border-black shadow-brutal-sm leading-none" id="version-badge">v1.4.0</div>
     </div>
 
     <!-- Connection Status -->
@@ -70,6 +70,13 @@
           <div class="text-sm font-bold text-black uppercase" data-i18n="connectionMode">Connection Mode</div>
           <div>
             <span id="connection-mode" class="status-badge connected px-3 py-1 text-xs font-bold">WebSocket</span>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t-3 border-black mt-2 pt-2">
+          <div class="text-sm font-bold text-black uppercase" data-i18n="serverType">Server Type</div>
+          <div class="text-sm text-black font-mono break-all text-right max-w-[200px] font-bold">
+            <span id="server-type">-</span>
           </div>
         </div>
       </div>
@@ -191,7 +198,7 @@
         <div class="mb-3">
           <label for="server-input" class="block text-xs text-black mb-1.5 font-bold uppercase" data-i18n="serverAddressLabel">Server Address:</label>
           <div class="flex gap-2 items-center">
-            <input type="text" id="server-input" value="" placeholder="ws://localhost:8080" class="brutal-input flex-1 px-3 py-2 text-xs font-mono font-bold uppercase">
+            <input type="text" id="server-input" value="" placeholder="http://localhost:18080" class="brutal-input flex-1 px-3 py-2 text-xs font-mono font-bold uppercase">
             <button id="save-server" class="brutal-btn-primary px-4 py-2 text-xs font-bold uppercase whitespace-nowrap" data-i18n="btnConnect">Connect</button>
           </div>
         </div>
@@ -199,11 +206,10 @@
         <div class="mt-3">
           <label class="block text-xs text-black mb-1.5 font-bold uppercase" data-i18n="presetAddresses">Preset Addresses:</label>
           <div class="flex flex-wrap gap-1.5">
-            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://localhost:8080" data-i18n="presetLocal">Local:8080</button>
-            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://js.local:8080" data-i18n="presetDockerLocal">Docker Local:8080</button>
-            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="wss://js.local:8080" data-i18n="presetDockerLocalSSL">Docker Local:8080 (SSL)</button>
-            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="ws://ws.js.local" data-i18n="presetDockerWS">Docker WS Subdomain</button>
-            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="wss://ws.js.local" data-i18n="presetDockerWSS">Docker WSS Subdomain</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="http://localhost:18080" data-i18n="presetLocal">Local:18080</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="http://localhost:3000" data-i18n="presetFullServer">Full:3000</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="http://js.local:18080" data-i18n="presetDockerLocal">Docker:18080</button>
+            <button class="btn-preset px-2 py-1 text-[11px] font-bold uppercase whitespace-nowrap" data-url="https://js.local:18080" data-i18n="presetDockerLocalSSL">Docker:18080 (SSL)</button>
           </div>
         </div>
       </div>
@@ -255,7 +261,7 @@
         <div class="brutal-card bg-white p-3 mt-3 text-black text-xs leading-relaxed">
           <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpConnectionTitle">Connection Settings:</p>
           <ul class="ml-5 mb-3 list-disc font-bold">
-            <li class="mb-1" data-i18n="helpConnection1">Manually enter server address, supports ws:// and wss:// protocols</li>
+            <li class="mb-1" data-i18n="helpConnection1">Enter server address (http:// or ws://), auto-discovers WebSocket endpoint</li>
             <li class="mb-1" data-i18n="helpConnection2">Click preset addresses to quickly select preset servers</li>
             <li class="mb-1" data-i18n="helpConnection3">Click "Connect" button to save address and connect to server</li>
             <li class="mb-1" data-i18n="helpConnection4">When "Auto Connect" is enabled, extension automatically connects on startup and reconnects after disconnection</li>
@@ -274,11 +280,11 @@
           
           <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpAddressTitle">Common Address Formats:</p>
           <ul class="ml-5 mb-3 list-disc font-bold">
-            <li class="mb-1" data-i18n="helpAddress1">Local Development: ws://localhost:8080</li>
-            <li class="mb-1" data-i18n="helpAddress2">Docker Local: ws://js.local:8080 or wss://js.local:8080</li>
-            <li class="mb-1" data-i18n="helpAddress3">Docker WebSocket Subdomain: ws://ws.js.local or wss://ws.js.local</li>
-            <li class="mb-1" data-i18n="helpAddress4">LAN Server: ws://192.168.1.100:8080</li>
-            <li class="mb-1" data-i18n="helpAddress5">Production: wss://your-domain.com:8080</li>
+            <li class="mb-1" data-i18n="helpAddress1">Local Lite: http://localhost:18080</li>
+            <li class="mb-1" data-i18n="helpAddress2">Local Full: http://localhost:3000</li>
+            <li class="mb-1" data-i18n="helpAddress3">Docker: http://js.local:18080 or https://js.local:18080</li>
+            <li class="mb-1" data-i18n="helpAddress4">LAN: http://192.168.1.100:18080</li>
+            <li class="mb-1" data-i18n="helpAddress5">Production: https://your-domain.com</li>
           </ul>
           
           <p class="mb-2 font-bold uppercase border-b-3 border-black pb-1" data-i18n="helpDockerTitle">Docker Deployment Notes:</p>

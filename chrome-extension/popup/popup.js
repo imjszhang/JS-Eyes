@@ -289,8 +289,9 @@ class JSEyesPopup {
       return;
     }
     
-    if (!serverUrl.startsWith('ws://') && !serverUrl.startsWith('wss://')) {
-      this.addLog(chrome.i18n.getMessage('logServerInvalidProtocol'));
+    const validPrefixes = ['http://', 'https://', 'ws://', 'wss://'];
+    if (!validPrefixes.some(p => serverUrl.startsWith(p))) {
+      this.addLog(chrome.i18n.getMessage('logServerInvalidProtocol') || 'Invalid protocol. Use http://, https://, ws://, or wss://');
       return;
     }
     
@@ -414,6 +415,23 @@ class JSEyesPopup {
       circuitBreakerElement.className = isOpen
         ? 'status-badge disconnected px-3 py-1 text-xs font-bold'
         : 'status-badge connected px-3 py-1 text-xs font-bold';
+    }
+    
+    // 更新服务器类型
+    const serverTypeElement = document.getElementById('server-type');
+    if (serverTypeElement && status.serverCapabilities) {
+      const caps = status.serverCapabilities;
+      if (caps.serverName || caps.serverVersion) {
+        const parts = [caps.serverName, caps.serverVersion].filter(Boolean);
+        serverTypeElement.textContent = parts.join(' ');
+      } else {
+        const features = [];
+        if (caps.hasSSE) features.push('SSE');
+        if (caps.hasServerRateLimit) features.push('RateLimit');
+        serverTypeElement.textContent = features.length > 0
+          ? `Server (${features.join(', ')})`
+          : 'Server (Basic)';
+      }
     }
   }
 
