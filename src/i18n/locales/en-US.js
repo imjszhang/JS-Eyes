@@ -22,7 +22,7 @@ window.I18nLocales['en-US'] = {
         btnDocs: 'Documentation',
     },
     marquee: {
-        text: 'WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION // COOKIE SYNC // CODE INJECTION // HEALTH CHECK // SSE FALLBACK // AUTO DISCOVERY // ADAPTIVE AUTH // WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION //',
+        text: 'WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION // COOKIE SYNC // CODE INJECTION // OPENCLAW PLUGIN // HEALTH CHECK // SSE FALLBACK // AUTO DISCOVERY // ADAPTIVE AUTH // WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL //',
     },
     features: {
         title: 'Capabilities',
@@ -59,6 +59,12 @@ window.I18nLocales['en-US'] = {
             name: 'JS Eyes Server',
             badge: 'BUILT-IN',
             desc: 'Lightweight server with HTTP + WebSocket on a single port. No authentication required. Perfect for local development and testing.',
+        },
+        openclaw: {
+            name: 'OpenClaw',
+            badge: 'PLUGIN',
+            desc: 'Registers as OpenClaw plugin with 7 AI tools, background server service, and CLI commands. Zero-config integration.',
+            btn: 'View on GitHub',
         },
         cowork: {
             name: 'DeepSeek Cowork',

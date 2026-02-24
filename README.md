@@ -29,6 +29,7 @@ JS Eyes is a browser extension that communicates with AI agent frameworks via We
 | Framework | Description |
 |-----------|-------------|
 | [js-eyes/server](./server) | Lightweight built-in server (HTTP+WS on single port, no auth) |
+| [OpenClaw](https://github.com/nicepkg/openclaw) (Plugin) | Registers as OpenClaw plugin — AI tools, background service, CLI commands |
 | [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | Full-featured agent framework (separate WS port, HMAC auth, SSE, rate limiting) |
 
 ## Features
@@ -105,7 +106,9 @@ npm run server
 # Starts on http://localhost:18080 (HTTP + WebSocket)
 ```
 
-**Option B** - Use a supported agent framework such as [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork).
+**Option B** - Use as an [OpenClaw](https://github.com/nicepkg/openclaw) plugin (see [OpenClaw Plugin](#openclaw-plugin) section below).
+
+**Option C** - Use a supported agent framework such as [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork).
 
 ### 2. Configure Connection
 
@@ -159,8 +162,54 @@ npm run bump -- 1.4.0
 
 Output files are saved to the `dist/` directory. See [releases/README.md](releases/README.md) for detailed documentation.
 
+## OpenClaw Plugin
+
+JS Eyes can be used as an [OpenClaw](https://github.com/nicepkg/openclaw) plugin, providing browser automation tools directly to OpenClaw AI agents.
+
+### What it provides
+
+- **Background Service** — Automatically starts/stops the built-in WebSocket server
+- **7 AI Tools** — `js_eyes_get_tabs`, `js_eyes_list_clients`, `js_eyes_open_url`, `js_eyes_close_tab`, `js_eyes_get_html`, `js_eyes_execute_script`, `js_eyes_get_cookies`
+- **CLI Commands** — `openclaw js-eyes status`, `openclaw js-eyes tabs`, `openclaw js-eyes server start/stop`
+
+### Setup
+
+1. Install the browser extension in Chrome/Edge/Firefox (same as above)
+2. Add the plugin to your OpenClaw config (`~/.openclaw/openclaw.json`):
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": ["/path/to/JS-Eyes/openclaw-plugin"]
+    },
+    "entries": {
+      "js-eyes": {
+        "enabled": true,
+        "config": {
+          "serverPort": 18080,
+          "autoStartServer": true
+        }
+      }
+    }
+  }
+}
+```
+
+3. Start OpenClaw — the server launches automatically and AI agents can control the browser via registered tools.
+
+### Plugin Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `serverHost` | string | `"localhost"` | Server listen address |
+| `serverPort` | number | `18080` | Server port |
+| `autoStartServer` | boolean | `true` | Auto-start server when plugin loads |
+| `requestTimeout` | number | `60` | Request timeout in seconds |
+
 ## Related Projects
 
+- [OpenClaw](https://github.com/nicepkg/openclaw) - AI agent framework with extensible plugin system
 - [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - AI agent framework with full-featured browser automation support
 
 ## Contributing

@@ -29,6 +29,7 @@ JS Eyes 是一个浏览器自动化控制扩展，通过 WebSocket 与 AI Agent 
 | 框架 | 说明 |
 |------|------|
 | [js-eyes/server](../server) | 内置轻量版服务器（HTTP+WS 共用端口，无认证） |
+| [OpenClaw](https://github.com/nicepkg/openclaw)（插件） | 注册为 OpenClaw 插件 — AI 工具、后台服务、CLI 命令 |
 | [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | 完整版 Agent 框架（独立 WS 端口、HMAC 认证、SSE、限流） |
 
 ## 功能特性
@@ -105,7 +106,9 @@ npm run server
 # 在 http://localhost:18080 启动（HTTP + WebSocket）
 ```
 
-**方式 B** — 使用支持的 Agent 框架，如 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork)。
+**方式 B** — 作为 [OpenClaw](https://github.com/nicepkg/openclaw) 插件使用（参见下方 [OpenClaw 插件](#openclaw-插件) 章节）。
+
+**方式 C** — 使用支持的 Agent 框架，如 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork)。
 
 ### 2. 配置连接
 
@@ -159,8 +162,54 @@ npm run bump -- 1.4.0
 
 输出文件保存在 `dist/` 目录。详细文档见 [releases/README.md](../releases/README.md)。
 
+## OpenClaw 插件
+
+JS Eyes 可以作为 [OpenClaw](https://github.com/nicepkg/openclaw) 插件使用，为 OpenClaw AI Agent 直接提供浏览器自动化工具。
+
+### 提供的能力
+
+- **后台服务** — 自动启动/停止内置 WebSocket 服务器
+- **7 个 AI 工具** — `js_eyes_get_tabs`、`js_eyes_list_clients`、`js_eyes_open_url`、`js_eyes_close_tab`、`js_eyes_get_html`、`js_eyes_execute_script`、`js_eyes_get_cookies`
+- **CLI 命令** — `openclaw js-eyes status`、`openclaw js-eyes tabs`、`openclaw js-eyes server start/stop`
+
+### 配置方法
+
+1. 在浏览器中安装 JS Eyes 扩展（步骤同上）
+2. 在 OpenClaw 配置文件（`~/.openclaw/openclaw.json`）中添加插件：
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": ["/path/to/JS-Eyes/openclaw-plugin"]
+    },
+    "entries": {
+      "js-eyes": {
+        "enabled": true,
+        "config": {
+          "serverPort": 18080,
+          "autoStartServer": true
+        }
+      }
+    }
+  }
+}
+```
+
+3. 启动 OpenClaw — 服务器自动启动，AI Agent 可通过注册的工具控制浏览器。
+
+### 插件配置项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `serverHost` | string | `"localhost"` | 服务器监听地址 |
+| `serverPort` | number | `18080` | 服务器端口 |
+| `autoStartServer` | boolean | `true` | 插件加载时自动启动服务器 |
+| `requestTimeout` | number | `60` | 请求超时秒数 |
+
 ## 相关项目
 
+- [OpenClaw](https://github.com/nicepkg/openclaw) - 可扩展插件系统的 AI Agent 框架
 - [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - 支持浏览器自动化的 AI Agent 框架
 
 ## 贡献

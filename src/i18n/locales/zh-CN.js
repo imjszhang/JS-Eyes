@@ -22,7 +22,7 @@ window.I18nLocales['zh-CN'] = {
         btnDocs: '\u67e5\u770b\u6587\u6863',
     },
     marquee: {
-        text: 'WEBSOCKET\u901a\u4fe1 // \u6807\u7b7e\u9875\u7ba1\u7406 // \u8fdc\u7a0b\u63a7\u5236 // \u5185\u5bb9\u63d0\u53d6 // COOKIE\u540c\u6b65 // \u4ee3\u7801\u6ce8\u5165 // \u5065\u5eb7\u68c0\u67e5 // SSE\u964d\u7ea7 // \u81ea\u52a8\u53d1\u73b0 // \u81ea\u9002\u5e94\u8ba4\u8bc1 // WEBSOCKET\u901a\u4fe1 // \u6807\u7b7e\u9875\u7ba1\u7406 // \u8fdc\u7a0b\u63a7\u5236 // \u5185\u5bb9\u63d0\u53d6 //',
+        text: 'WEBSOCKET\u901a\u4fe1 // \u6807\u7b7e\u9875\u7ba1\u7406 // \u8fdc\u7a0b\u63a7\u5236 // \u5185\u5bb9\u63d0\u53d6 // COOKIE\u540c\u6b65 // \u4ee3\u7801\u6ce8\u5165 // OPENCLAW\u63d2\u4ef6 // \u5065\u5eb7\u68c0\u67e5 // SSE\u964d\u7ea7 // \u81ea\u52a8\u53d1\u73b0 // \u81ea\u9002\u5e94\u8ba4\u8bc1 // WEBSOCKET\u901a\u4fe1 // \u6807\u7b7e\u9875\u7ba1\u7406 // \u8fdc\u7a0b\u63a7\u5236 //',
     },
     features: {
         title: '\u6838\u5fc3\u529f\u80fd',
@@ -59,6 +59,12 @@ window.I18nLocales['zh-CN'] = {
             name: 'JS Eyes Server',
             badge: '\u5185\u7f6e',
             desc: '\u8f7b\u91cf\u7ea7\u670d\u52a1\u5668\uff0cHTTP + WebSocket \u5171\u7528\u5355\u7aef\u53e3\u3002\u65e0\u9700\u8ba4\u8bc1\uff0c\u975e\u5e38\u9002\u5408\u672c\u5730\u5f00\u53d1\u548c\u6d4b\u8bd5\u3002',
+        },
+        openclaw: {
+            name: 'OpenClaw',
+            badge: '\u63d2\u4ef6',
+            desc: '\u6ce8\u518c\u4e3a OpenClaw \u63d2\u4ef6\uff0c\u63d0\u4f9b 7 \u4e2a AI \u5de5\u5177\u3001\u540e\u53f0\u670d\u52a1\u5668\u670d\u52a1\u548c CLI \u547d\u4ee4\u3002\u96f6\u914d\u7f6e\u96c6\u6210\u3002',
+            btn: '\u5728 GitHub \u67e5\u770b',
         },
         cowork: {
             name: 'DeepSeek Cowork',
