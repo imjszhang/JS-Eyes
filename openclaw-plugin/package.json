@@ -1,0 +1,11 @@
+{
+  "name": "js-eyes-openclaw-plugin",
+  "version": "1.4.0",
+  "description": "OpenClaw plugin for JS Eyes — browser automation via WebSocket",
+  "type": "module",
+  "main": "index.mjs",
+  "license": "MIT",
+  "openclaw": {
+    "extensions": ["./index.mjs"]
+  }
+}

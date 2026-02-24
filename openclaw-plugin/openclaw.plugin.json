@@ -1,0 +1,53 @@
+{
+  "id": "js-eyes",
+  "name": "JS Eyes",
+  "description": "浏览器自动化工具 — 通过 WebSocket 为 AI Agent 提供远程浏览器控制能力（标签页管理、内容获取、脚本执行等）",
+  "version": "1.4.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serverHost": {
+        "type": "string",
+        "default": "localhost",
+        "description": "JS-Eyes 服务器监听地址"
+      },
+      "serverPort": {
+        "type": "number",
+        "default": 18080,
+        "description": "JS-Eyes 服务器端口"
+      },
+      "autoStartServer": {
+        "type": "boolean",
+        "default": true,
+        "description": "是否随插件加载自动启动内置服务器"
+      },
+      "requestTimeout": {
+        "type": "number",
+        "default": 60,
+        "description": "浏览器操作请求超时（秒）"
+      }
+    }
+  },
+  "uiHints": {
+    "serverHost": {
+      "label": "服务器地址",
+      "placeholder": "localhost",
+      "help": "JS-Eyes WebSocket/HTTP 服务器的监听地址"
+    },
+    "serverPort": {
+      "label": "服务器端口",
+      "placeholder": "18080",
+      "help": "JS-Eyes 服务器监听端口，需与浏览器扩展中配置的端口一致"
+    },
+    "autoStartServer": {
+      "label": "自动启动服务器",
+      "help": "启用后 OpenClaw 启动时自动拉起 JS-Eyes 内置服务器；禁用则需手动启动"
+    },
+    "requestTimeout": {
+      "label": "请求超时（秒）",
+      "help": "单次浏览器操作的最大等待时间",
+      "advanced": true
+    }
+  }
+}
