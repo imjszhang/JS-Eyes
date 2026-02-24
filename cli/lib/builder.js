@@ -19,7 +19,6 @@ const FIREFOX_DIR = path.join(PROJECT_ROOT, 'firefox-extension');
 const DIST_DIR = path.join(PROJECT_ROOT, 'dist');
 const SIGNED_DIR = path.join(PROJECT_ROOT, 'signed-firefox-extensions');
 const PKG_PATH = path.join(PROJECT_ROOT, 'package.json');
-const CONFIG_PATH = path.join(PROJECT_ROOT, 'config.json');
 const CHROME_MANIFEST = path.join(CHROME_DIR, 'manifest.json');
 const FIREFOX_MANIFEST = path.join(FIREFOX_DIR, 'manifest.json');
 
@@ -87,16 +86,7 @@ function loadEnvFile() {
 function getApiConfig() {
     const apiKey = process.env.AMO_API_KEY;
     const apiSecret = process.env.AMO_API_SECRET;
-    if (apiKey && apiSecret) return { apiKey, apiSecret, source: 'env' };
-
-    if (fs.existsSync(CONFIG_PATH)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-            if (config.amo && config.amo.apiKey && config.amo.apiSecret) {
-                return { apiKey: config.amo.apiKey, apiSecret: config.amo.apiSecret, source: 'file' };
-            }
-        } catch (_) {}
-    }
+    if (apiKey && apiSecret) return { apiKey, apiSecret };
     return null;
 }
 
@@ -231,13 +221,10 @@ async function buildFirefox(t, sign = true) {
         console.log('  set AMO_API_KEY=your-api-key');
         console.log('  set AMO_API_SECRET=your-api-secret');
         console.log('');
-        console.log(t('env.optFile'));
-        console.log('  { "amo": { "apiKey": "...", "apiSecret": "..." } }');
-        console.log('');
         console.log(t('env.amoUrl'));
         process.exit(1);
     }
-    console.log(`  ✓ ${t('env.from' + (apiCfg.source === 'env' ? 'Env' : 'File'))}`);
+    console.log(`  ✓ ${t('env.fromEnv')}`);
 
     ensureDir(SIGNED_DIR);
     ensureDir(DIST_DIR);
