@@ -18,13 +18,15 @@
     "release": "node cli/cli.js release",
     "setup:gh-pages": "node cli/cli.js setup-github-pages",
     "setup:cloudflare": "node cli/cli.js setup-cloudflare",
-    "test": "node --test server/ws-handler.test.js firefox-extension/background/utils.test.js",
-    "test:server": "node --test server/ws-handler.test.js",
-    "test:extension": "node --test firefox-extension/background/utils.test.js",
+    "test": "node --test test/ws-handler.test.js test/utils.test.js test/js-eyes-client.test.js",
+    "test:server": "node --test test/ws-handler.test.js",
+    "test:extension": "node --test test/utils.test.js",
+    "test:client": "node --test test/js-eyes-client.test.js",
     "server": "node server/index.js",
     "server:install": "cd server && npm install"
   },
   "dependencies": {
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "ws": "^8.19.0"
   }
 }

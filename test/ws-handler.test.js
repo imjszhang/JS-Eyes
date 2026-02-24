@@ -19,7 +19,7 @@ const {
     setupAutomationClient,
     resolveRequest,
   },
-} = require('./ws-handler');
+} = require('../server/ws-handler');
 
 // ── helpers ──────────────────────────────────────────────────────────
 
