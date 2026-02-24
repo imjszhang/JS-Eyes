@@ -10,16 +10,20 @@ window.I18nLocales['en-US'] = {
     },
     hero: {
         badge: 'v1.4.0 // BROWSER AUTOMATION',
+        openclawBadge: 'OFFICIAL OPENCLAW PLUGIN',
         titleLine1: "AI Agent's",
         titleLine2: 'Browser Eyes',
-        desc: 'Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser. WebSocket-powered automation for any AI framework.',
+        desc: 'Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser. WebSocket-powered automation for any AI framework. First-class <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> plugin support.',
         termLine1: '> npm run server',
         termLine2: '\u2713 Server on :18080',
         termLine3: '\u2713 WebSocket ready',
         termLine4: '\u2713 Extension connected',
         termLine5: '\u2713 3 tabs synced',
+        termLine6: '> openclaw install js-eyes',
+        termLine7: '\u2713 JS Eyes plugin registered',
         btnDownload: 'Download Now',
         btnDocs: 'Documentation',
+        btnOpenclaw: 'OpenClaw Plugin',
     },
     marquee: {
         text: 'WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION // COOKIE SYNC // CODE INJECTION // OPENCLAW PLUGIN // HEALTH CHECK // SSE FALLBACK // AUTO DISCOVERY // ADAPTIVE AUTH // WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL //',
@@ -63,8 +67,9 @@ window.I18nLocales['en-US'] = {
         openclaw: {
             name: 'OpenClaw',
             badge: 'PLUGIN',
-            desc: 'Registers as OpenClaw plugin with 7 AI tools, background server service, and CLI commands. Zero-config integration.',
-            btn: 'View on GitHub',
+            desc: 'Registers as OpenClaw plugin with 7 AI tools, background server, and CLI commands. Works with WhatsApp, Telegram, Discord and 50+ integrations. Zero-config.',
+            btn: 'Get OpenClaw',
+            hot: 'HOT',
         },
         cowork: {
             name: 'DeepSeek Cowork',

@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JS Eyes - Browser Extension for AI Agent Frameworks</title>
-    <meta name="description" content="JS Eyes provides browser automation capabilities for AI agent frameworks via WebSocket. Supports Chrome, Edge, and Firefox.">
-    <meta name="keywords" content="browser extension, AI agent, WebSocket, browser automation, Chrome, Firefox, Edge">
-    <meta property="og:title" content="JS Eyes - AI Agent Browser Automation">
-    <meta property="og:description" content="Let AI assistants operate your browser: open pages, fill forms, extract data, cross-site operations.">
+    <meta name="description" content="JS Eyes provides browser automation capabilities for AI agent frameworks via WebSocket. Official OpenClaw plugin. Supports Chrome, Edge, and Firefox.">
+    <meta name="keywords" content="browser extension, AI agent, WebSocket, browser automation, Chrome, Firefox, Edge, OpenClaw, personal AI assistant, OpenClaw plugin, lobster AI">
+    <meta property="og:title" content="JS Eyes - AI Agent Browser Automation | OpenClaw Plugin">
+    <meta property="og:description" content="Let AI assistants operate your browser: open pages, fill forms, extract data. Official OpenClaw plugin with 7 AI tools and zero-config integration.">
     <meta property="og:type" content="website">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='16' fill='%23FCD228'/><text x='64' y='64' font-family='sans-serif' font-size='72' font-weight='700' fill='%2337342F' text-anchor='middle' dominant-baseline='central'>JS</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -127,6 +127,24 @@
             box-shadow: 2px 2px 0px 0px #000000;
         }
 
+        .brutal-btn-openclaw {
+            background: #FFFFFF;
+            color: #E74C3C;
+            border: 3px solid #E74C3C;
+            box-shadow: 4px 4px 0px 0px #E74C3C;
+            font-weight: 700;
+            text-transform: uppercase;
+            transition: all 0.1s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .brutal-btn-openclaw:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px #E74C3C;
+        }
+
         .text-stroke {
             -webkit-text-stroke: 1px #000000;
             color: transparent;
@@ -187,10 +205,14 @@
 
         <!-- Hero Section -->
         <section class="mb-24 relative text-center sm:text-left">
-            <div class="inline-block">
+            <div class="inline-flex flex-wrap gap-3 items-center">
                 <div class="opacity-0-init animate-slide-up stagger-1 bg-black text-brand-yellow inline-block px-4 py-1 border-2 border-black font-mono font-bold text-sm mb-6 shadow-brutal-white transform -rotate-1" data-i18n="hero.badge">
                     v1.4.0 // BROWSER AUTOMATION
                 </div>
+                <a href="https://openclaw.ai/" target="_blank" class="opacity-0-init animate-slide-up stagger-1 bg-[#E74C3C] text-white inline-flex items-center gap-2 px-4 py-1 border-2 border-black font-mono font-bold text-sm mb-6 shadow-brutal transform rotate-1 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] transition-all no-underline">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
+                    <span data-i18n="hero.openclawBadge">OFFICIAL OPENCLAW PLUGIN</span>
+                </a>
             </div>
 
             <h1 class="opacity-0-init animate-slide-up stagger-2 text-6xl md:text-8xl font-black tracking-tight mb-8 leading-none uppercase">
@@ -201,7 +223,7 @@
             <div class="opacity-0-init animate-slide-up stagger-3 flex flex-col sm:flex-row gap-8 items-start">
                 <p class="text-xl md:text-2xl font-bold max-w-2xl leading-relaxed border-l-4 border-black pl-6 bg-white/50 backdrop-blur-sm p-4 text-left" data-i18n-html="hero.desc">
                     Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser.
-                    WebSocket-powered automation for any AI framework.
+                    WebSocket-powered automation for any AI framework. First-class <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> plugin support.
                 </p>
 
                 <div class="brutal-card p-4 bg-black text-brand-yellow font-mono text-xs w-full sm:w-80 shadow-brutal text-left">
@@ -216,6 +238,8 @@
                         <p class="text-green-400" data-i18n="hero.termLine3">&#10003; WebSocket ready</p>
                         <p class="text-blue-400" data-i18n="hero.termLine4">&#10003; Extension connected</p>
                         <p class="text-green-400" data-i18n="hero.termLine5">&#10003; 3 tabs synced</p>
+                        <p class="text-gray-500 mt-1" data-i18n="hero.termLine6">> openclaw install js-eyes</p>
+                        <p class="text-[#E74C3C]" data-i18n="hero.termLine7">&#10003; JS Eyes plugin registered</p>
                         <p><span class="animate-blink">_</span></p>
                     </div>
                 </div>
@@ -229,6 +253,10 @@
                 <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn-secondary px-8 py-4 text-lg gap-3">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span data-i18n="hero.btnDocs">Documentation</span>
+                </a>
+                <a href="https://openclaw.ai/" target="_blank" class="brutal-btn-openclaw px-8 py-4 text-lg gap-3">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
+                    <span data-i18n="hero.btnOpenclaw">OpenClaw Plugin</span>
                 </a>
             </div>
         </section>
@@ -438,18 +466,19 @@
                     </div>
                 </div>
 
-                <div class="brutal-card p-8">
+                <div class="brutal-card p-8 relative border-[#E74C3C]">
+                    <div class="absolute -top-3 -right-3 bg-[#E74C3C] text-white font-mono font-bold text-xs px-3 py-1 border-2 border-black shadow-brutal transform rotate-12 z-10" data-i18n="frameworks.openclaw.hot">HOT</div>
                     <div class="flex items-center gap-3 mb-4">
-                        <div class="border-2 border-black w-12 h-12 flex items-center justify-center bg-[#FCD228]">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                        <div class="border-2 border-black w-12 h-12 flex items-center justify-center bg-[#E74C3C]">
+                            <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
                         </div>
                         <h3 class="text-2xl font-bold uppercase" data-i18n="frameworks.openclaw.name">OpenClaw</h3>
                     </div>
-                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 mb-4" data-i18n="frameworks.openclaw.badge">PLUGIN</div>
-                    <p class="font-medium mb-4" data-i18n="frameworks.openclaw.desc">Registers as OpenClaw plugin with 7 AI tools, background server service, and CLI commands. Zero-config integration.</p>
-                    <a href="https://github.com/nicepkg/openclaw" target="_blank" class="brutal-btn-secondary px-4 py-2 text-sm gap-2 inline-flex">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
-                        <span data-i18n="frameworks.openclaw.btn">View on GitHub</span>
+                    <div class="font-mono text-sm bg-[#E74C3C] text-white inline-block px-3 py-1 mb-4" data-i18n="frameworks.openclaw.badge">PLUGIN</div>
+                    <p class="font-medium mb-4" data-i18n="frameworks.openclaw.desc">Registers as OpenClaw plugin with 7 AI tools, background server, and CLI commands. Works with WhatsApp, Telegram, Discord and 50+ integrations. Zero-config.</p>
+                    <a href="https://openclaw.ai/" target="_blank" class="brutal-btn-openclaw px-4 py-2 text-sm gap-2 inline-flex">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
+                        <span data-i18n="frameworks.openclaw.btn">Get OpenClaw</span>
                     </a>
                 </div>
 
