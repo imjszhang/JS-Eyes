@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**DeepSeek Cowork 浏览器扩展组件**
+**AI Agent 浏览器自动化扩展**
 
-为 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 提供浏览器自动化控制能力
+通过 WebSocket 为 AI Agent 框架提供浏览器自动化控制能力
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/badge/GitHub-imjszhang%2Fjs--eyes-181717?logo=github)](https://github.com/imjszhang/js-eyes)
@@ -20,16 +20,16 @@
 
 ## 简介
 
-JS Eyes 是一个浏览器自动化控制扩展，通过 WebSocket 与兼容的服务器通信。支持多种服务器后端，通过自动能力探测实现自适应连接。
+JS Eyes 是一个浏览器自动化控制扩展，通过 WebSocket 与 AI Agent 框架通信。支持多种服务器后端，通过自动能力探测实现自适应连接。
 
 > 💡 让 AI 助手能够帮你操作浏览器：打开页面、批量填写表单、提取数据、跨站操作
 
-### 兼容的服务器
+### 支持的 Agent 框架
 
-| 服务器 | 说明 |
-|--------|------|
+| 框架 | 说明 |
+|------|------|
 | [js-eyes/server](../server) | 内置轻量版服务器（HTTP+WS 共用端口，无认证） |
-| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | 完整版服务器（独立 WS 端口、HMAC 认证、SSE、限流） |
+| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | 完整版 Agent 框架（独立 WS 端口、HMAC 认证、SSE、限流） |
 
 ## 功能特性
 
@@ -105,7 +105,7 @@ npm run server
 # 在 http://localhost:18080 启动（HTTP + WebSocket）
 ```
 
-**方式 B** — 使用 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) 完整版服务器。
+**方式 B** — 使用支持的 Agent 框架，如 [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork)。
 
 ### 2. 配置连接
 
@@ -161,7 +161,7 @@ npm run bump -- 1.4.0
 
 ## 相关项目
 
-- [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - 主项目
+- [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - 支持浏览器自动化的 AI Agent 框架
 
 ## 贡献
 
@@ -187,7 +187,7 @@ npm run bump -- 1.4.0
 
 <div align="center">
 
-**让 AI 浏览器自动化触手可及**
+**为任何 AI Agent 框架提供浏览器自动化能力**
 
 由 [@imjszhang](https://x.com/imjszhang) 用 ❤️ 构建
 

@@ -1,0 +1,80 @@
+window.I18nLocales = window.I18nLocales || {};
+window.I18nLocales['en-US'] = {
+    nav: {
+        features: 'FEATURES',
+        browsers: 'BROWSERS',
+        workflow: 'WORKFLOW',
+        download: 'DOWNLOAD',
+        github: 'GitHub',
+        langToggle: '中',
+    },
+    hero: {
+        badge: 'v1.4.0 // BROWSER AUTOMATION',
+        titleLine1: "AI Agent's",
+        titleLine2: 'Browser Eyes',
+        desc: 'Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser. WebSocket-powered automation for any AI framework.',
+        termLine1: '> npm run server',
+        termLine2: '\u2713 Server on :18080',
+        termLine3: '\u2713 WebSocket ready',
+        termLine4: '\u2713 Extension connected',
+        termLine5: '\u2713 3 tabs synced',
+        btnDownload: 'Download Now',
+        btnDocs: 'Documentation',
+    },
+    marquee: {
+        text: 'WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION // COOKIE SYNC // CODE INJECTION // HEALTH CHECK // SSE FALLBACK // AUTO DISCOVERY // ADAPTIVE AUTH // WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION //',
+    },
+    features: {
+        title: 'Capabilities',
+        ws: { name: 'Real-time WebSocket', desc: 'Persistent bi-directional connection between AI agent and browser. Low-latency command execution with instant feedback.' },
+        discovery: { name: 'Auto Discovery', desc: 'Automatically detects server capabilities, endpoints, and authentication requirements. Zero manual configuration needed.' },
+        tabs: { name: 'Tab Management', desc: 'Full control over browser tabs: open, close, navigate, and sync tab state in real-time with the server.' },
+        inject: { name: 'Code Injection', desc: 'Execute JavaScript and inject CSS into any page. Extract DOM content, fill forms, and manipulate page elements remotely.' },
+        auth: { name: 'Adaptive Auth', desc: 'Automatically detects server auth requirements. Supports HMAC-SHA256 signing and no-auth modes seamlessly.' },
+        sse: { name: 'SSE Fallback', desc: 'Automatic degradation from WebSocket to SSE when connections fail. Circuit breaker protection with health monitoring.' },
+    },
+    browsers: {
+        title: 'Browser Support',
+        chrome: 'Chrome',
+        edge: 'Edge',
+        firefox: 'Firefox',
+    },
+    workflow: {
+        title: 'How It Works',
+        step1: { name: 'Install', desc: 'Download and load the extension in Chrome, Edge, or Firefox.' },
+        step2: { name: 'Start Server', desc: 'Run the built-in server or connect to a compatible AI agent framework.' },
+        step3: { name: 'Connect', desc: 'Extension auto-discovers the server and establishes WebSocket connection.' },
+        step4: { name: 'Automate', desc: 'AI agents control the browser: open pages, fill forms, extract data.' },
+    },
+    arch: {
+        title: 'Architecture',
+        agent: { label: 'AI Agent', name: 'Framework', desc: 'DeepSeek Cowork or any compatible agent sends commands via API' },
+        server: { label: 'Server', name: 'Bridge', desc: 'HTTP + WebSocket relay server handles routing and state management' },
+        ext: { label: 'JS Eyes', name: 'Extension', desc: 'Executes browser actions: navigation, DOM access, cookie sync, script injection' },
+        stats: { commands: 'API Commands', browsers: 'Browsers', config: 'Config', reconnect: 'Auto-reconnect' },
+    },
+    frameworks: {
+        title: 'Compatible Frameworks',
+        builtin: {
+            name: 'JS Eyes Server',
+            badge: 'BUILT-IN',
+            desc: 'Lightweight server with HTTP + WebSocket on a single port. No authentication required. Perfect for local development and testing.',
+        },
+        cowork: {
+            name: 'DeepSeek Cowork',
+            badge: 'FULL FEATURED',
+            desc: 'Complete AI agent framework with dedicated WS port, HMAC authentication, SSE support, and rate limiting built-in.',
+            btn: 'View on GitHub',
+        },
+    },
+    cta: {
+        title: 'Ready to Automate?',
+        desc: 'Give your AI agents the power to see and control the browser.',
+        btnDownload: 'Download Latest',
+        btnGithub: 'GitHub Repo',
+    },
+    footer: {
+        tagline: 'Browser automation for any AI agent framework',
+        releases: 'Releases',
+    },
+};

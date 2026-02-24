@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Eyes - Browser Extension for AI Agent Frameworks</title>
+    <meta name="description" content="JS Eyes provides browser automation capabilities for AI agent frameworks via WebSocket. Supports Chrome, Edge, and Firefox.">
+    <meta name="keywords" content="browser extension, AI agent, WebSocket, browser automation, Chrome, Firefox, Edge">
+    <meta property="og:title" content="JS Eyes - AI Agent Browser Automation">
+    <meta property="og:description" content="Let AI assistants operate your browser: open pages, fill forms, extract data, cross-site operations.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='16' fill='%23FCD228'/><text x='64' y='64' font-family='sans-serif' font-size='72' font-weight='700' fill='%2337342F' text-anchor='middle' dominant-baseline='central'>JS</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            yellow: '#FCD228',
+                            black: '#000000',
+                            white: '#FFFFFF',
+                        }
+                    },
+                    boxShadow: {
+                        'brutal': '4px 4px 0px 0px #000000',
+                        'brutal-lg': '8px 8px 0px 0px #000000',
+                        'brutal-hover': '2px 2px 0px 0px #000000',
+                        'brutal-white': '4px 4px 0px 0px #FFFFFF',
+                    },
+                    borderWidth: {
+                        '3': '3px',
+                    },
+                    animation: {
+                        'marquee': 'marquee 30s linear infinite',
+                        'slide-up': 'slideUp 0.8s ease-out forwards',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'blink': 'blink 1s step-end infinite',
+                    },
+                    keyframes: {
+                        marquee: {
+                            '0%': { transform: 'translateX(0%)' },
+                            '100%': { transform: 'translateX(-100%)' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(40px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        blink: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #FCD228;
+            color: #000000;
+            background-image:
+                linear-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: #FCD228; border-left: 3px solid black; }
+        ::-webkit-scrollbar-thumb { background: #000000; border: 3px solid #FCD228; }
+        ::-webkit-scrollbar-thumb:hover { background: #333; }
+
+        .brutal-card {
+            background: #FFFFFF;
+            border: 3px solid #000000;
+            box-shadow: 6px 6px 0px 0px #000000;
+            transition: all 0.2s ease-in-out;
+        }
+        .brutal-card:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 4px 4px 0px 0px #000000;
+        }
+
+        .brutal-btn-primary {
+            background: #000000;
+            color: #FCD228;
+            border: 3px solid #000000;
+            box-shadow: 4px 4px 0px 0px #FFFFFF;
+            font-weight: 700;
+            text-transform: uppercase;
+            transition: all 0.1s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .brutal-btn-primary:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px #FFFFFF;
+        }
+        .brutal-btn-primary:active {
+            transform: translate(4px, 4px);
+            box-shadow: none;
+        }
+
+        .brutal-btn-secondary {
+            background: #FFFFFF;
+            color: #000000;
+            border: 3px solid #000000;
+            box-shadow: 4px 4px 0px 0px #000000;
+            font-weight: 700;
+            text-transform: uppercase;
+            transition: all 0.1s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .brutal-btn-secondary:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px #000000;
+        }
+
+        .text-stroke {
+            -webkit-text-stroke: 1px #000000;
+            color: transparent;
+        }
+
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+        .stagger-4 { animation-delay: 0.4s; }
+        .stagger-5 { animation-delay: 0.5s; }
+        .opacity-0-init { opacity: 0; }
+
+        #lang-toggle {
+            cursor: pointer;
+            min-width: 36px;
+            text-align: center;
+        }
+    </style>
+
+    <!-- i18n -->
+    <script src="./i18n/index.js"></script>
+    <script src="./i18n/locales/en-US.js"></script>
+    <script src="./i18n/locales/zh-CN.js"></script>
+</head>
+<body class="min-h-screen font-sans selection:bg-black selection:text-brand-yellow overflow-x-hidden">
+
+    <div id="canvas-container" class="fixed inset-0 -z-10 opacity-40 pointer-events-none"></div>
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 p-4">
+        <div class="max-w-7xl mx-auto bg-white border-3 border-black shadow-brutal flex justify-between items-center px-6 py-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none overflow-hidden">
+                    <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
+                        <rect width="128" height="128" rx="16" ry="16" fill="#FCD228"/>
+                        <text x="64" y="64" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="72" font-weight="700" fill="#37342F" text-anchor="middle" dominant-baseline="central">JS</text>
+                    </svg>
+                </div>
+                <span class="text-2xl font-bold tracking-tight uppercase">Eyes</span>
+            </div>
+            <div class="hidden md:flex items-center gap-8 font-mono font-bold text-sm">
+                <a href="#features" class="hover:underline decoration-2 underline-offset-4" data-i18n="nav.features">FEATURES</a>
+                <a href="#browsers" class="hover:underline decoration-2 underline-offset-4" data-i18n="nav.browsers">BROWSERS</a>
+                <a href="#workflow" class="hover:underline decoration-2 underline-offset-4" data-i18n="nav.workflow">WORKFLOW</a>
+                <a href="#download" class="hover:underline decoration-2 underline-offset-4" data-i18n="nav.download">DOWNLOAD</a>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="lang-toggle" class="brutal-btn-secondary px-3 py-2 text-sm font-mono" data-i18n="nav.langToggle">EN</button>
+                <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn-primary px-5 py-2 text-sm gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+                    <span data-i18n="nav.github">GitHub</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-32 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+
+        <!-- Hero Section -->
+        <section class="mb-24 relative text-center sm:text-left">
+            <div class="inline-block">
+                <div class="opacity-0-init animate-slide-up stagger-1 bg-black text-brand-yellow inline-block px-4 py-1 border-2 border-black font-mono font-bold text-sm mb-6 shadow-brutal-white transform -rotate-1" data-i18n="hero.badge">
+                    v1.4.0 // BROWSER AUTOMATION
+                </div>
+            </div>
+
+            <h1 class="opacity-0-init animate-slide-up stagger-2 text-6xl md:text-8xl font-black tracking-tight mb-8 leading-none uppercase">
+                <span data-i18n="hero.titleLine1">AI Agent's</span><br>
+                <span class="text-white text-stroke" data-i18n="hero.titleLine2">Browser Eyes</span>
+            </h1>
+
+            <div class="opacity-0-init animate-slide-up stagger-3 flex flex-col sm:flex-row gap-8 items-start">
+                <p class="text-xl md:text-2xl font-bold max-w-2xl leading-relaxed border-l-4 border-black pl-6 bg-white/50 backdrop-blur-sm p-4 text-left" data-i18n-html="hero.desc">
+                    Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser.
+                    WebSocket-powered automation for any AI framework.
+                </p>
+
+                <div class="brutal-card p-4 bg-black text-brand-yellow font-mono text-xs w-full sm:w-80 shadow-brutal text-left">
+                    <div class="flex gap-2 mb-2 border-b border-gray-700 pb-2">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    </div>
+                    <div class="space-y-1">
+                        <p data-i18n="hero.termLine1">> npm run server</p>
+                        <p class="text-green-400" data-i18n="hero.termLine2">&#10003; Server on :18080</p>
+                        <p class="text-green-400" data-i18n="hero.termLine3">&#10003; WebSocket ready</p>
+                        <p class="text-blue-400" data-i18n="hero.termLine4">&#10003; Extension connected</p>
+                        <p class="text-green-400" data-i18n="hero.termLine5">&#10003; 3 tabs synced</p>
+                        <p><span class="animate-blink">_</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="opacity-0-init animate-slide-up stagger-4 flex flex-col sm:flex-row gap-6 mt-10">
+                <a href="https://github.com/imjszhang/js-eyes/releases/latest" target="_blank" class="brutal-btn-primary px-8 py-4 text-lg gap-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span data-i18n="hero.btnDownload">Download Now</span>
+                </a>
+                <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn-secondary px-8 py-4 text-lg gap-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span data-i18n="hero.btnDocs">Documentation</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- Marquee -->
+        <div class="bg-black text-brand-yellow py-3 border-y-4 border-white mb-24 overflow-hidden -mx-4 sm:-mx-6 lg:-mx-8 transform rotate-1 shadow-brutal">
+            <div class="animate-marquee whitespace-nowrap font-mono font-bold text-xl" data-i18n="marquee.text">
+                WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION // COOKIE SYNC // CODE INJECTION // HEALTH CHECK // SSE FALLBACK // AUTO DISCOVERY // ADAPTIVE AUTH // WEBSOCKET // TAB MANAGEMENT // REMOTE CONTROL // CONTENT EXTRACTION //
+            </div>
+        </div>
+
+        <!-- Features Grid -->
+        <section id="features" class="mb-24">
+            <h2 class="text-4xl font-black mb-10 uppercase inline-block bg-white border-3 border-black px-4 py-2 shadow-brutal" data-i18n="features.title">
+                Capabilities
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.ws.name">Real-time WebSocket</h3>
+                    <p class="font-medium" data-i18n="features.ws.desc">Persistent bi-directional connection between AI agent and browser. Low-latency command execution with instant feedback.</p>
+                </div>
+
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.discovery.name">Auto Discovery</h3>
+                    <p class="font-medium" data-i18n="features.discovery.desc">Automatically detects server capabilities, endpoints, and authentication requirements. Zero manual configuration needed.</p>
+                </div>
+
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.tabs.name">Tab Management</h3>
+                    <p class="font-medium" data-i18n="features.tabs.desc">Full control over browser tabs: open, close, navigate, and sync tab state in real-time with the server.</p>
+                </div>
+
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.inject.name">Code Injection</h3>
+                    <p class="font-medium" data-i18n="features.inject.desc">Execute JavaScript and inject CSS into any page. Extract DOM content, fill forms, and manipulate page elements remotely.</p>
+                </div>
+
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.auth.name">Adaptive Auth</h3>
+                    <p class="font-medium" data-i18n="features.auth.desc">Automatically detects server auth requirements. Supports HMAC-SHA256 signing and no-auth modes seamlessly.</p>
+                </div>
+
+                <div class="brutal-card p-6 flex flex-col h-full">
+                    <div class="border-2 border-black w-12 h-12 flex items-center justify-center mb-4 bg-[#FCD228]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-3 uppercase" data-i18n="features.sse.name">SSE Fallback</h3>
+                    <p class="font-medium" data-i18n="features.sse.desc">Automatic degradation from WebSocket to SSE when connections fail. Circuit breaker protection with health monitoring.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Browser Support -->
+        <section id="browsers" class="mb-24">
+            <h2 class="text-4xl font-black mb-10 uppercase inline-block bg-white border-3 border-black px-4 py-2 shadow-brutal" data-i18n="browsers.title">
+                Browser Support
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="brutal-card p-8 text-center">
+                    <div class="w-20 h-20 mx-auto mb-4 bg-[#FCD228] border-3 border-black flex items-center justify-center rounded-full">
+                        <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2 uppercase" data-i18n="browsers.chrome">Chrome</h3>
+                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 border-2 border-black">Manifest V3</div>
+                    <p class="mt-3 font-medium">Version 88+</p>
+                </div>
+
+                <div class="brutal-card p-8 text-center">
+                    <div class="w-20 h-20 mx-auto mb-4 bg-[#FCD228] border-3 border-black flex items-center justify-center rounded-full">
+                        <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.24 12a8.24 8.24 0 01-8.24 8.24A8.24 8.24 0 013.76 12 8.24 8.24 0 0112 3.76 8.24 8.24 0 0120.24 12z"/><path d="M12 7l2.5 5L12 17l-2.5-5z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2 uppercase" data-i18n="browsers.edge">Edge</h3>
+                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 border-2 border-black">Manifest V3</div>
+                    <p class="mt-3 font-medium">Version 88+</p>
+                </div>
+
+                <div class="brutal-card p-8 text-center">
+                    <div class="w-20 h-20 mx-auto mb-4 bg-[#FCD228] border-3 border-black flex items-center justify-center rounded-full">
+                        <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M8 12c0-2.2 1.8-4 4-4"/><path d="M12 8v8"/><circle cx="12" cy="12" r="2"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2 uppercase" data-i18n="browsers.firefox">Firefox</h3>
+                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 border-2 border-black">Manifest V2</div>
+                    <p class="mt-3 font-medium">Version 58+</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workflow -->
+        <section id="workflow" class="mb-24">
+            <h2 class="text-4xl font-black mb-10 uppercase inline-block bg-white border-3 border-black px-4 py-2 shadow-brutal" data-i18n="workflow.title">
+                How It Works
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="brutal-card p-6 bg-white relative">
+                    <div class="absolute -top-4 -right-4 w-10 h-10 bg-black text-brand-yellow border-2 border-black flex items-center justify-center font-bold font-mono text-xl z-10">1</div>
+                    <h3 class="text-xl font-bold mb-2 uppercase border-b-2 border-black pb-2" data-i18n="workflow.step1.name">Install</h3>
+                    <p class="font-medium text-sm" data-i18n="workflow.step1.desc">Download and load the extension in Chrome, Edge, or Firefox.</p>
+                </div>
+
+                <div class="brutal-card p-6 bg-white relative">
+                    <div class="absolute -top-4 -right-4 w-10 h-10 bg-black text-brand-yellow border-2 border-black flex items-center justify-center font-bold font-mono text-xl z-10">2</div>
+                    <h3 class="text-xl font-bold mb-2 uppercase border-b-2 border-black pb-2" data-i18n="workflow.step2.name">Start Server</h3>
+                    <p class="font-medium text-sm" data-i18n="workflow.step2.desc">Run the built-in server or connect to a compatible AI agent framework.</p>
+                </div>
+
+                <div class="brutal-card p-6 bg-white relative">
+                    <div class="absolute -top-4 -right-4 w-10 h-10 bg-black text-brand-yellow border-2 border-black flex items-center justify-center font-bold font-mono text-xl z-10">3</div>
+                    <h3 class="text-xl font-bold mb-2 uppercase border-b-2 border-black pb-2" data-i18n="workflow.step3.name">Connect</h3>
+                    <p class="font-medium text-sm" data-i18n="workflow.step3.desc">Extension auto-discovers the server and establishes WebSocket connection.</p>
+                </div>
+
+                <div class="brutal-card p-6 bg-white relative">
+                    <div class="absolute -top-4 -right-4 w-10 h-10 bg-black text-brand-yellow border-2 border-black flex items-center justify-center font-bold font-mono text-xl z-10">4</div>
+                    <h3 class="text-xl font-bold mb-2 uppercase border-b-2 border-black pb-2" data-i18n="workflow.step4.name">Automate</h3>
+                    <p class="font-medium text-sm" data-i18n="workflow.step4.desc">AI agents control the browser: open pages, fill forms, extract data.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture / Stats -->
+        <section class="mb-24">
+            <div class="brutal-card bg-black text-white p-8 md:p-12">
+                <h2 class="text-3xl font-black mb-8 uppercase text-center text-brand-yellow" data-i18n="arch.title">Architecture</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                    <div class="border-3 border-[#FCD228] p-6">
+                        <div class="font-mono text-brand-yellow text-sm uppercase tracking-widest mb-3" data-i18n="arch.agent.label">AI Agent</div>
+                        <div class="text-2xl font-bold mb-2" data-i18n="arch.agent.name">Framework</div>
+                        <p class="text-gray-400 text-sm font-medium" data-i18n="arch.agent.desc">DeepSeek Cowork or any compatible agent sends commands via API</p>
+                    </div>
+                    <div class="border-3 border-[#FCD228] p-6 relative">
+                        <div class="hidden md:block absolute -left-8 top-1/2 -translate-y-1/2 text-brand-yellow text-2xl font-mono">&larr; WS &rarr;</div>
+                        <div class="font-mono text-brand-yellow text-sm uppercase tracking-widest mb-3" data-i18n="arch.server.label">Server</div>
+                        <div class="text-2xl font-bold mb-2" data-i18n="arch.server.name">Bridge</div>
+                        <p class="text-gray-400 text-sm font-medium" data-i18n="arch.server.desc">HTTP + WebSocket relay server handles routing and state management</p>
+                    </div>
+                    <div class="border-3 border-[#FCD228] p-6">
+                        <div class="font-mono text-brand-yellow text-sm uppercase tracking-widest mb-3" data-i18n="arch.ext.label">JS Eyes</div>
+                        <div class="text-2xl font-bold mb-2" data-i18n="arch.ext.name">Extension</div>
+                        <p class="text-gray-400 text-sm font-medium" data-i18n="arch.ext.desc">Executes browser actions: navigation, DOM access, cookie sync, script injection</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center mt-12 pt-8 border-t-3 border-[#333]">
+                    <div>
+                        <div class="text-5xl font-black mb-2 text-[#FCD228]">12+</div>
+                        <div class="font-mono text-sm uppercase tracking-widest" data-i18n="arch.stats.commands">API Commands</div>
+                    </div>
+                    <div>
+                        <div class="text-5xl font-black mb-2 text-[#FCD228]">3</div>
+                        <div class="font-mono text-sm uppercase tracking-widest" data-i18n="arch.stats.browsers">Browsers</div>
+                    </div>
+                    <div>
+                        <div class="text-5xl font-black mb-2 text-[#FCD228]">0ms</div>
+                        <div class="font-mono text-sm uppercase tracking-widest" data-i18n="arch.stats.config">Config</div>
+                    </div>
+                    <div>
+                        <div class="text-5xl font-black mb-2 text-[#FCD228]">24/7</div>
+                        <div class="font-mono text-sm uppercase tracking-widest" data-i18n="arch.stats.reconnect">Auto-reconnect</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Agent Frameworks -->
+        <section class="mb-24">
+            <h2 class="text-4xl font-black mb-10 uppercase inline-block bg-white border-3 border-black px-4 py-2 shadow-brutal" data-i18n="frameworks.title">
+                Compatible Frameworks
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="brutal-card p-8">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="border-2 border-black w-12 h-12 flex items-center justify-center bg-[#FCD228]">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold uppercase" data-i18n="frameworks.builtin.name">JS Eyes Server</h3>
+                    </div>
+                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 mb-4" data-i18n="frameworks.builtin.badge">BUILT-IN</div>
+                    <p class="font-medium mb-4" data-i18n="frameworks.builtin.desc">Lightweight server with HTTP + WebSocket on a single port. No authentication required. Perfect for local development and testing.</p>
+                    <div class="brutal-card bg-black text-brand-yellow font-mono text-xs p-3 hover:transform-none hover:shadow-[6px_6px_0px_0px_#000]">
+                        <p>$ npm run server</p>
+                        <p class="text-green-400">Listening on :18080</p>
+                    </div>
+                </div>
+
+                <div class="brutal-card p-8">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="border-2 border-black w-12 h-12 flex items-center justify-center bg-[#FCD228]">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="square" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold uppercase" data-i18n="frameworks.cowork.name">DeepSeek Cowork</h3>
+                    </div>
+                    <div class="font-mono text-sm bg-black text-brand-yellow inline-block px-3 py-1 mb-4" data-i18n="frameworks.cowork.badge">FULL FEATURED</div>
+                    <p class="font-medium mb-4" data-i18n="frameworks.cowork.desc">Complete AI agent framework with dedicated WS port, HMAC authentication, SSE support, and rate limiting built-in.</p>
+                    <a href="https://github.com/imjszhang/deepseek-cowork" target="_blank" class="brutal-btn-secondary px-4 py-2 text-sm gap-2 inline-flex">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+                        <span data-i18n="frameworks.cowork.btn">View on GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA / Download -->
+        <section id="download" class="mb-24 text-center">
+            <h2 class="text-5xl font-black uppercase mb-4" data-i18n="cta.title">Ready to Automate?</h2>
+            <p class="text-xl font-bold mb-10 max-w-2xl mx-auto" data-i18n="cta.desc">Give your AI agents the power to see and control the browser.</p>
+            <div class="flex flex-col sm:flex-row gap-6 justify-center">
+                <a href="https://github.com/imjszhang/js-eyes/releases/latest" target="_blank" class="brutal-btn-primary px-10 py-5 text-xl gap-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span data-i18n="cta.btnDownload">Download Latest</span>
+                </a>
+                <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn-secondary px-10 py-5 text-xl gap-3">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+                    <span data-i18n="cta.btnGithub">GitHub Repo</span>
+                </a>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-black text-white py-12 border-t-8 border-[#FCD228]">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="font-mono font-bold text-xl tracking-tighter">
+                JS_EYES <span class="text-[#FCD228]">v1.4.0</span>
+            </div>
+            <div class="text-center md:text-right">
+                <p class="text-sm text-gray-400 mb-2" data-i18n="footer.tagline">Browser automation for any AI agent framework</p>
+                <div class="flex gap-6 font-bold uppercase text-sm justify-center md:justify-end">
+                    <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="hover:text-[#FCD228] hover:underline decoration-2" data-i18n="nav.github">GitHub</a>
+                    <a href="https://github.com/imjszhang/js-eyes/releases" target="_blank" class="hover:text-[#FCD228] hover:underline decoration-2" data-i18n="footer.releases">Releases</a>
+                    <a href="https://x.com/imjszhang" target="_blank" class="hover:text-[#FCD228] hover:underline decoration-2">@imjszhang</a>
+                </div>
+            </div>
+        </div>
+        <div class="max-w-7xl mx-auto px-6 mt-8 pt-6 border-t border-gray-800 text-center text-sm text-gray-500">
+            MIT License &copy; 2025 <a href="https://x.com/imjszhang" target="_blank" class="hover:text-[#FCD228]">@imjszhang</a>
+        </div>
+    </footer>
+
+    <script>
+    // Init i18n
+    if (typeof I18nManager !== 'undefined') {
+        I18nManager.init();
+    }
+
+    // Language toggle
+    document.getElementById('lang-toggle').addEventListener('click', function () {
+        if (typeof I18nManager === 'undefined') return;
+        var next = I18nManager.getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN';
+        I18nManager.setLocale(next);
+    });
+
+    // Three.js Background Animation
+    function initThreeJS() {
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 25;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const group = new THREE.Group();
+        scene.add(group);
+
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.12
+        });
+
+        const eye1 = new THREE.TorusGeometry(6, 2, 16, 40);
+        const mesh1 = new THREE.Mesh(eye1, material);
+        mesh1.position.set(-14, 2, 0);
+        group.add(mesh1);
+
+        const eye2 = new THREE.SphereGeometry(3, 16, 16);
+        const mesh2 = new THREE.Mesh(eye2, material);
+        mesh2.position.set(-14, 2, 0);
+        group.add(mesh2);
+
+        const geo3 = new THREE.IcosahedronGeometry(7, 1);
+        const mesh3 = new THREE.Mesh(geo3, material);
+        mesh3.position.set(16, -3, -5);
+        group.add(mesh3);
+
+        const geo4 = new THREE.OctahedronGeometry(4, 0);
+        const mesh4 = new THREE.Mesh(geo4, material);
+        mesh4.position.set(0, 10, -8);
+        group.add(mesh4);
+
+        const gridHelper = new THREE.GridHelper(100, 20, 0x000000, 0x000000);
+        gridHelper.rotation.x = Math.PI / 2;
+        gridHelper.position.z = -15;
+        gridHelper.material.opacity = 0.06;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            mesh1.rotation.x += 0.003;
+            mesh1.rotation.z += 0.002;
+            mesh2.rotation.y += 0.005;
+            mesh3.rotation.x -= 0.004;
+            mesh3.rotation.y -= 0.003;
+            mesh4.rotation.x += 0.006;
+            mesh4.rotation.z -= 0.004;
+            gridHelper.rotation.z += 0.0005;
+            group.rotation.y += (mouseX * 0.15 - group.rotation.y) * 0.05;
+            group.rotation.x += (mouseY * 0.15 - group.rotation.x) * 0.05;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+    initThreeJS();
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+    </script>
+</body>
+</html>

@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**Browser Extension for DeepSeek Cowork**
+**Browser Extension for AI Agent Frameworks**
 
-Provides browser automation capabilities for [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork)
+Provides browser automation capabilities for AI agent frameworks via WebSocket
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/badge/GitHub-imjszhang%2Fjs--eyes-181717?logo=github)](https://github.com/imjszhang/js-eyes)
@@ -20,16 +20,16 @@ Provides browser automation capabilities for [DeepSeek Cowork](https://github.co
 
 ## Introduction
 
-JS Eyes is a browser extension that communicates with compatible servers via WebSocket to enable browser automation control. It supports multiple server backends through automatic capability discovery.
+JS Eyes is a browser extension that communicates with AI agent frameworks via WebSocket to enable browser automation control. It supports multiple server backends through automatic capability discovery.
 
 > 💡 Let AI assistants help you operate your browser: open pages, batch fill forms, extract data, cross-site operations
 
-### Compatible Servers
+### Supported Agent Frameworks
 
-| Server | Description |
-|--------|-------------|
+| Framework | Description |
+|-----------|-------------|
 | [js-eyes/server](./server) | Lightweight built-in server (HTTP+WS on single port, no auth) |
-| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | Full-featured server (separate WS port, HMAC auth, SSE, rate limiting) |
+| [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) | Full-featured agent framework (separate WS port, HMAC auth, SSE, rate limiting) |
 
 ## Features
 
@@ -105,7 +105,7 @@ npm run server
 # Starts on http://localhost:18080 (HTTP + WebSocket)
 ```
 
-**Option B** - Use [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) full-featured server.
+**Option B** - Use a supported agent framework such as [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork).
 
 ### 2. Configure Connection
 
@@ -161,7 +161,7 @@ Output files are saved to the `dist/` directory. See [releases/README.md](releas
 
 ## Related Projects
 
-- [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - Main project
+- [DeepSeek Cowork](https://github.com/imjszhang/deepseek-cowork) - AI agent framework with full-featured browser automation support
 
 ## Contributing
 
@@ -187,7 +187,7 @@ Follow me on X for updates, tips, and more open source projects!
 
 <div align="center">
 
-**Making AI browser automation accessible to everyone**
+**Browser automation for any AI agent framework**
 
 Built with ❤️ by [@imjszhang](https://x.com/imjszhang)
 
