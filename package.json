@@ -9,6 +9,9 @@
     "build:firefox": "node releases/build.js firefox",
     "build:firefox:dev": "node releases/build.js firefox --no-sign",
     "bump": "node releases/build.js bump",
+    "test": "node --test server/ws-handler.test.js firefox-extension/background/utils.test.js",
+    "test:server": "node --test server/ws-handler.test.js",
+    "test:extension": "node --test firefox-extension/background/utils.test.js",
     "server": "node server/index.js",
     "server:install": "cd server && npm install"
   },

@@ -2,7 +2,7 @@
 
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const { handleConnection, createState, startCleanup } = require('./ws-handler');
+const { handleConnection, createState, startCleanup, getExtensionSummaries } = require('./ws-handler');
 
 // ── CLI args ────────────────────────────────────────────────────────
 
@@ -57,33 +57,51 @@ function handleHttpRequest(req, res) {
         name: 'js-eyes-server',
         version: '1.0.0',
         websocket: `ws://${HOST}:${PORT}`,
-        endpoints: ['/api/browser/status', '/api/browser/tabs', '/api/browser/health'],
+        endpoints: ['/api/browser/status', '/api/browser/tabs', '/api/browser/clients', '/api/browser/health'],
       });
       break;
 
-    case '/api/browser/status':
+    case '/api/browser/status': {
+      const browsers = getExtensionSummaries(state);
+      const totalTabs = browsers.reduce((sum, b) => sum + b.tabCount, 0);
       jsonResponse(res, 200, {
         status: 'success',
         data: {
           isRunning: true,
           uptime: Math.floor(process.uptime()),
           connections: {
-            extensions: state.extensionClients.size,
+            extensions: browsers.map(({ clientId, browserName, connectedAt, tabCount }) =>
+              ({ clientId, browserName, connectedAt, tabCount })),
             automationClients: state.automationClients.size,
           },
-          tabs: state.tabs.length,
+          tabs: totalTabs,
           pendingRequests: state.pendingResponses.size,
         },
       });
       break;
+    }
 
-    case '/api/browser/tabs':
+    case '/api/browser/tabs': {
+      const browsers = getExtensionSummaries(state);
+      const allTabs = browsers.flatMap((b) => b.tabs);
+      const lastBrowser = browsers[browsers.length - 1];
       jsonResponse(res, 200, {
         status: 'success',
-        tabs: state.tabs,
-        activeTabId: state.activeTabId,
+        browsers,
+        tabs: allTabs,
+        activeTabId: lastBrowser ? lastBrowser.activeTabId : null,
       });
       break;
+    }
+
+    case '/api/browser/clients': {
+      const browsers = getExtensionSummaries(state);
+      jsonResponse(res, 200, {
+        status: 'success',
+        clients: browsers,
+      });
+      break;
+    }
 
     case '/api/browser/health':
       jsonResponse(res, 200, {

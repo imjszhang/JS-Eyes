@@ -15,6 +15,32 @@ function send(socket, data) {
   }
 }
 
+function parseBrowserName(userAgent) {
+  if (!userAgent) return 'unknown';
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('firefox') || ua.includes('gecko/')) return 'firefox';
+  if (ua.includes('edg/')) return 'edge';
+  if (ua.includes('chrome') || ua.includes('chromium')) return 'chrome';
+  if (ua.includes('safari')) return 'safari';
+  return 'unknown';
+}
+
+function getExtensionSummaries(state) {
+  const summaries = [];
+  for (const [clientId, conn] of state.extensionClients) {
+    if (conn.socket.readyState !== 1) continue;
+    summaries.push({
+      clientId,
+      browserName: conn.browserName,
+      tabs: conn.tabs,
+      activeTabId: conn.activeTabId,
+      tabCount: conn.tabs.length,
+      connectedAt: new Date(conn.createdAt).toISOString(),
+    });
+  }
+  return summaries;
+}
+
 // ── connection entry ────────────────────────────────────────────────
 
 function handleConnection(socket, request, state) {
@@ -41,12 +67,16 @@ function setupExtensionClient(socket, clientAddress, state) {
     clientAddress,
     createdAt: Date.now(),
     lastActivity: Date.now(),
+    browserName: 'unknown',
+    userAgent: null,
+    tabs: [],
+    activeTabId: null,
   });
 
-  // Skip 30-second auth wait: tell extension auth succeeded immediately
   send(socket, {
     type: 'auth_result',
     success: true,
+    clientId,
     sessionId: null,
     expiresIn: null,
     permissions: null,
@@ -135,28 +165,32 @@ function handleExtensionMessage(raw, clientId, state) {
       return;
     }
 
-    case 'init':
-      console.log('[Extension] Init received');
-      {
-        const conn = state.extensionClients.get(clientId);
-        if (conn) {
-          send(conn.socket, {
-            type: 'init_ack',
-            status: 'ok',
-            serverConfig: {
-              request: { defaultTimeout: REQUEST_TIMEOUT_MS },
-            },
-            timestamp: new Date().toISOString(),
-          });
-        }
+    case 'init': {
+      const conn = state.extensionClients.get(clientId);
+      if (conn) {
+        conn.userAgent = data.userAgent || null;
+        conn.browserName = parseBrowserName(data.userAgent);
+        console.log(`[Extension] Init received: ${conn.browserName} (${clientId})`);
+        send(conn.socket, {
+          type: 'init_ack',
+          status: 'ok',
+          clientId,
+          browserName: conn.browserName,
+          serverConfig: {
+            request: { defaultTimeout: REQUEST_TIMEOUT_MS },
+          },
+          timestamp: new Date().toISOString(),
+        });
       }
       return;
+    }
 
     case 'data': {
-      const tabs = data.tabs || data.payload?.tabs || [];
-      const activeTabId = data.active_tab_id || data.payload?.active_tab_id;
-      state.tabs = tabs;
-      state.activeTabId = activeTabId || null;
+      const conn = state.extensionClients.get(clientId);
+      if (conn) {
+        conn.tabs = data.tabs || data.payload?.tabs || [];
+        conn.activeTabId = (data.active_tab_id || data.payload?.active_tab_id) ?? null;
+      }
       return;
     }
 
@@ -279,38 +313,59 @@ function handleAutomationMessage(raw, clientId, socket, state) {
   const action = data.action || data.type;
   const requestId = data.requestId;
 
+  const target = data.target || null;
+
   switch (action) {
-    case 'get_tabs':
+    case 'get_tabs': {
+      const browsers = getExtensionSummaries(state);
+      const allTabs = browsers.flatMap((b) => b.tabs);
+      const lastBrowser = browsers[browsers.length - 1];
       send(socket, {
         type: 'get_tabs_response',
         requestId,
         status: 'success',
-        data: { tabs: state.tabs, activeTabId: state.activeTabId },
+        data: {
+          browsers,
+          tabs: allTabs,
+          activeTabId: lastBrowser ? lastBrowser.activeTabId : null,
+        },
       });
       break;
+    }
+
+    case 'list_clients': {
+      const browsers = getExtensionSummaries(state);
+      send(socket, {
+        type: 'list_clients_response',
+        requestId,
+        status: 'success',
+        data: { clients: browsers },
+      });
+      break;
+    }
 
     case 'open_url':
-      forwardToExtension('open_url', data, socket, state, ['url', 'tabId', 'windowId']);
+      forwardToExtension('open_url', data, socket, state, ['url', 'tabId', 'windowId'], target);
       break;
 
     case 'close_tab':
-      forwardToExtension('close_tab', data, socket, state, ['tabId']);
+      forwardToExtension('close_tab', data, socket, state, ['tabId'], target);
       break;
 
     case 'get_html':
-      forwardToExtension('get_html', data, socket, state, ['tabId']);
+      forwardToExtension('get_html', data, socket, state, ['tabId'], target);
       break;
 
     case 'execute_script':
-      forwardToExtension('execute_script', data, socket, state, ['tabId', 'code']);
+      forwardToExtension('execute_script', data, socket, state, ['tabId', 'code'], target);
       break;
 
     case 'inject_css':
-      forwardToExtension('inject_css', data, socket, state, ['tabId', 'css']);
+      forwardToExtension('inject_css', data, socket, state, ['tabId', 'css'], target);
       break;
 
     case 'get_cookies':
-      forwardToExtension('get_cookies', data, socket, state, ['tabId']);
+      forwardToExtension('get_cookies', data, socket, state, ['tabId'], target);
       break;
 
     default:
@@ -319,18 +374,21 @@ function handleAutomationMessage(raw, clientId, socket, state) {
   }
 }
 
-// ── forward command to first available extension ────────────────────
+// ── forward command to extension (with optional targeting) ──────────
 
-function forwardToExtension(type, data, automationSocket, state, fields) {
+function forwardToExtension(type, data, automationSocket, state, fields, target) {
   const requestId = data.requestId || generateId();
 
-  const ext = pickExtension(state);
+  const ext = pickExtension(state, target);
   if (!ext) {
+    const detail = target
+      ? `No browser extension matching target "${target}"`
+      : 'No browser extension connected';
     send(automationSocket, {
       type: `${type}_response`,
       requestId,
       status: 'error',
-      message: 'No browser extension connected',
+      message: detail,
     });
     return;
   }
@@ -344,9 +402,22 @@ function forwardToExtension(type, data, automationSocket, state, fields) {
   registerPending(requestId, automationSocket, type, state);
 }
 
-function pickExtension(state) {
+function pickExtension(state, target) {
+  if (!target) {
+    for (const [, conn] of state.extensionClients) {
+      if (conn.socket.readyState === 1) return conn;
+    }
+    return null;
+  }
+
+  // Exact clientId match
+  const byId = state.extensionClients.get(target);
+  if (byId && byId.socket.readyState === 1) return byId;
+
+  // Match by browserName (case-insensitive)
+  const lower = target.toLowerCase();
   for (const [, conn] of state.extensionClients) {
-    if (conn.socket.readyState === 1) return conn;
+    if (conn.socket.readyState === 1 && conn.browserName === lower) return conn;
   }
   return null;
 }
@@ -421,8 +492,6 @@ function startCleanup(state) {
 
 function createState() {
   return {
-    tabs: [],
-    activeTabId: null,
     extensionClients: new Map(),
     automationClients: new Map(),
     pendingResponses: new Map(),
@@ -434,5 +503,19 @@ module.exports = {
   handleConnection,
   createState,
   startCleanup,
+  getExtensionSummaries,
   REQUEST_TIMEOUT_MS,
+  _internal: {
+    parseBrowserName,
+    pickExtension,
+    send,
+    generateId,
+    forwardToExtension,
+    handleExtensionMessage,
+    handleAutomationMessage,
+    setupExtensionClient,
+    setupAutomationClient,
+    registerPending,
+    resolveRequest,
+  },
 };
