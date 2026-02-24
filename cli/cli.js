@@ -199,7 +199,7 @@ function cmdRelease(flags) {
 
         log(`${t('release.creating')} ${tag} ...`);
 
-        const DIST_DIR = path.join(__dirname, '..', '..', 'dist');
+        const DIST_DIR = path.join(__dirname, '..', 'dist');
         const assets = [];
         if (fs.existsSync(DIST_DIR)) {
             const distFiles = fs.readdirSync(DIST_DIR).filter(f => f.includes(version));
