@@ -1,0 +1,14 @@
+{
+  "pages": {
+    "domain": "js-eyes.com",
+    "githubRepo": "imjszhang/js-eyes"
+  },
+  "cloudflare": {
+    "domain": "js-eyes.com",
+    "githubPagesTarget": "imjszhang.github.io"
+  },
+  "amo": {
+    "apiKey": "your-amo-api-key",
+    "apiSecret": "your-amo-api-secret"
+  }
+}

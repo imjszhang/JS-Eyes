@@ -1,0 +1,10 @@
+{
+  "pages": {
+    "domain": "js-eyes.com",
+    "githubRepo": "imjszhang/js-eyes"
+  },
+  "cloudflare": {
+    "domain": "js-eyes.com",
+    "githubPagesTarget": "imjszhang.github.io"
+  }
+}

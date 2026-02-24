@@ -16,6 +16,8 @@
     "commit": "node cli/cli.js commit",
     "sync": "node cli/cli.js sync",
     "release": "node cli/cli.js release",
+    "setup:gh-pages": "node cli/cli.js setup-github-pages",
+    "setup:cloudflare": "node cli/cli.js setup-cloudflare",
     "test": "node --test server/ws-handler.test.js firefox-extension/background/utils.test.js",
     "test:server": "node --test server/ws-handler.test.js",
     "test:extension": "node --test firefox-extension/background/utils.test.js",

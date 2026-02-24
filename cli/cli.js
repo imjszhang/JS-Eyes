@@ -12,6 +12,8 @@
  *   commit [--message "..."] [--all] Git add + commit
  *   sync [--no-build] [--no-push]   Build + commit + push
  *   release [--draft] [--assets]     Create GitHub release (requires gh CLI)
+ *   setup-github-pages [--domain] [--repo]  Configure Pages custom domain
+ *   setup-cloudflare [--domain] [--target]   Configure Cloudflare DNS
  *
  * Options:
  *   --no-sign       Skip Firefox signing
@@ -23,6 +25,8 @@
 const i18n = require('./i18n');
 const { buildSite, buildChrome, buildFirefox, bump, getVersion } = require('./lib/builder');
 const { gitStatus, gitAddAll, gitCommit, gitPush, gitDiffStat, gitTag, gitTagExists, generateCommitMessage, ghRelease, ghAvailable } = require('./lib/git');
+const { setupGitHubPages } = require('./lib/github-pages');
+const { setupCloudflare } = require('./lib/cloudflare');
 const fs = require('fs');
 const path = require('path');
 
@@ -179,6 +183,32 @@ async function cmdSync(flags) {
     }
 }
 
+// ── Setup GitHub Pages ────────────────────────────────────────────────
+
+async function cmdSetupGitHubPages(flags) {
+    try {
+        const domain = flags.domain || flags.d;
+        const repo = flags.repo || flags.r;
+        await setupGitHubPages(domain, repo, t);
+    } catch (err) {
+        log(`  ✗ ${err.message}`);
+        process.exit(1);
+    }
+}
+
+// ── Setup Cloudflare ───────────────────────────────────────────────────
+
+async function cmdSetupCloudflare(flags) {
+    try {
+        const domain = flags.domain || flags.d;
+        const target = flags.target || flags.t;
+        await setupCloudflare(domain, target, t);
+    } catch (err) {
+        log(`  ✗ ${err.message}`);
+        process.exit(1);
+    }
+}
+
 // ── Release ──────────────────────────────────────────────────────────
 
 function cmdRelease(flags) {
@@ -241,6 +271,8 @@ function showHelp() {
     console.log(t('help.cmdCommit'));
     console.log(t('help.cmdSync'));
     console.log(t('help.cmdRelease'));
+    console.log(t('help.cmdSetupGhPages'));
+    console.log(t('help.cmdSetupCloudflare'));
     console.log('');
     console.log(t('help.options'));
     console.log(t('help.optNoSign'));
@@ -250,6 +282,9 @@ function showHelp() {
     console.log(t('help.optNoPush'));
     console.log(t('help.optDraft'));
     console.log(t('help.optLang'));
+    console.log(t('help.optDomain'));
+    console.log(t('help.optRepo'));
+    console.log(t('help.optTarget'));
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
@@ -272,6 +307,14 @@ async function main() {
             break;
         case 'release':
             cmdRelease(flags);
+            break;
+        case 'setup-github-pages':
+        case 'setup-gh-pages':
+            await cmdSetupGitHubPages(flags);
+            break;
+        case 'setup-cloudflare':
+        case 'setup-cf':
+            await cmdSetupCloudflare(flags);
             break;
         case '--help':
         case '-h':
