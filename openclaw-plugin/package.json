@@ -1,5 +1,5 @@
 {
-  "name": "js-eyes-openclaw-plugin",
+  "name": "js-eyes",
   "version": "1.4.0",
   "description": "OpenClaw plugin for JS Eyes — browser automation via WebSocket",
   "type": "module",
