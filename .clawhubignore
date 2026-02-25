@@ -1,0 +1,47 @@
+# Browser extensions — installed separately from GitHub Releases
+chrome-extension/
+firefox-extension/
+
+# Website, CLI tools, tests
+docs/
+src/
+cli/
+test/
+
+# Build artifacts and dependencies
+dist/
+build/
+node_modules/
+work_dir/
+signed-firefox-extensions/
+*.zip
+*.xpi
+
+# Config and environment
+config.json
+config.json.example
+.env
+.env.*
+.env.example
+
+# Project docs already covered by SKILL.md
+README.md
+CHANGELOG.md
+RELEASE_NOTES.md
+
+# Git and IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+.cursor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp
+*.log
+*.tmp
+*.temp
+.cache/
