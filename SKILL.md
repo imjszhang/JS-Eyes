@@ -1,7 +1,7 @@
 ---
 name: js-eyes
 description: Browser automation for AI agents — control tabs, extract content, execute scripts and manage cookies via WebSocket.
-version: 1.5.0
+version: 1.4.0
 metadata:
   openclaw:
     emoji: "\U0001F441"
@@ -89,7 +89,7 @@ js-eyes/
 
 ## Prerequisites
 
-- **Node.js** >= 14
+- **Node.js** >= 16
 - **A supported browser**: Chrome 88+ / Edge 88+ / Firefox 58+
 
 ## Deploy to .openclaw
@@ -100,22 +100,31 @@ Install the skill via ClawHub:
 clawhub install js-eyes
 ```
 
-This downloads and extracts the skill bundle into the local OpenClaw skills directory (typically `~/.openclaw/skills/js-eyes/`). The bundle is self-contained — it includes the plugin, WebSocket server, and client SDK.
+ClawHub installs into `./skills` under your current working directory (or your configured OpenClaw workspace). The bundle is self-contained — it includes the plugin, WebSocket server, and client SDK.
 
-Install Node.js dependencies — the `ws` package is required at runtime:
+**1. Install Node.js dependencies** — the `ws` package is required at runtime:
 
 ```bash
-cd ~/.openclaw/skills/js-eyes
+cd ./skills/js-eyes   # from the dir where you ran clawhub install; or ~/.openclaw/skills/js-eyes if using legacy sync
 npm install
 ```
 
-Register the plugin in your OpenClaw config. Edit `~/.openclaw/openclaw.json`:
+> Run `npm install` if `ws` was not auto-installed via the Skills UI.
+
+**2. Register the plugin** in `~/.openclaw/openclaw.json`. The path must point to the `openclaw-plugin` subdirectory inside the skill, **not** the skill root:
+
+| Install method | `<SKILL_ROOT>` | Plugin path for `plugins.load.paths` |
+|----------------|----------------|--------------------------------------|
+| ClawHub (workspace) | `./skills/js-eyes` or `$WORKSPACE/skills/js-eyes` | `./skills/js-eyes/openclaw-plugin` (use absolute path if needed) |
+| ClawHub (legacy sync) | `~/.openclaw/skills/js-eyes` | `~/.openclaw/skills/js-eyes/openclaw-plugin` |
+
+Example config (replace the path with your actual install location — use `pwd` after `cd` into the skill to get the absolute path). If you already have other plugins, **append** this path to the existing `paths` array:
 
 ```json
 {
   "plugins": {
     "load": {
-      "paths": ["~/.openclaw/skills/js-eyes/openclaw-plugin"]
+      "paths": ["/path/to/skills/js-eyes/openclaw-plugin"]
     },
     "entries": {
       "js-eyes": {
@@ -130,15 +139,15 @@ Register the plugin in your OpenClaw config. Edit `~/.openclaw/openclaw.json`:
 }
 ```
 
-> The path must point to the `openclaw-plugin` subdirectory inside the installed skill, not to the skill root. `index.mjs` resolves `../server/` and `../clients/` relative to itself, so the bundle directory layout must be preserved.
+> **Path note**: `index.mjs` imports from `../server/` and `../clients/` relative to itself, so the bundle directory layout must be preserved. Point `paths` at the `openclaw-plugin` subdirectory only.
 
-Restart OpenClaw to load the plugin.
+**3. Restart OpenClaw** to load the plugin.
 
-> **For developers**: if you want to modify the source, clone the [full repository](https://github.com/imjszhang/js-eyes) and point `plugins.load.paths` to the `openclaw-plugin` directory inside your clone instead.
+> **For developers**: clone the [full repository](https://github.com/imjszhang/js-eyes) and point `plugins.load.paths` to the `openclaw-plugin` directory inside your clone.
 
 ## Browser Extension Setup
 
-The plugin talks to browsers through the JS Eyes extension. Install it separately:
+The plugin talks to browsers through the JS Eyes extension. Install it separately (independent of ClawHub):
 
 1. Download from [GitHub Releases](https://github.com/imjszhang/js-eyes/releases/latest):
    - **Chrome / Edge**: `js-eyes-chrome-vX.Y.Z.zip` — open `chrome://extensions/` (or `edge://extensions/`), enable Developer mode, click "Load unpacked", select the extracted folder
@@ -182,6 +191,7 @@ You can also ask the AI agent to list your browser tabs — it should invoke `js
 | `js_eyes_get_tabs` returns empty | No extension connected | Click extension icon, verify address is correct, click Connect |
 | `Cannot find module 'ws'` | Dependencies not installed | Run `npm install` in the skill root (where `package.json` declares `ws`) |
 | Tools not appearing in OpenClaw | Plugin path wrong or not enabled | Ensure `plugins.load.paths` points to the `openclaw-plugin` subdirectory, not the skill root |
+| Plugin path not found (Windows) | Path format | Use forward slashes in JSON, e.g. `C:/Users/you/skills/js-eyes/openclaw-plugin` |
 
 ## Links
 
