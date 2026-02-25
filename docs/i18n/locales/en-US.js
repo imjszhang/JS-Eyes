@@ -9,7 +9,7 @@ window.I18nLocales['en-US'] = {
         langToggle: '中',
     },
     hero: {
-        badge: 'v1.4.0 // BROWSER AUTOMATION',
+        badge: 'v1.4.3 // BROWSER AUTOMATION',
         openclawBadge: 'OFFICIAL OPENCLAW PLUGIN',
         titleLine1: "AI Agent's",
         titleLine2: 'Browser Eyes',

@@ -1,6 +1,6 @@
 {
   "name": "js-eyes",
-  "version": "1.4.0",
+  "version": "1.4.3",
   "description": "OpenClaw plugin for JS Eyes — browser automation via WebSocket",
   "type": "module",
   "main": "index.mjs",

@@ -1,7 +1,7 @@
 ---
 name: js-eyes
 description: Browser automation for AI agents — control tabs, extract content, execute scripts and manage cookies via WebSocket.
-version: 1.4.0
+version: 1.4.3
 metadata:
   openclaw:
     emoji: "\U0001F441"

@@ -2,7 +2,7 @@
   "id": "js-eyes",
   "name": "JS Eyes",
   "description": "浏览器自动化工具 — 通过 WebSocket 为 AI Agent 提供远程浏览器控制能力（标签页管理、内容获取、脚本执行等）",
-  "version": "1.4.0",
+  "version": "1.4.3",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
