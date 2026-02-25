@@ -1,0 +1,51 @@
+# Build artifacts & dependencies
+dist/
+build/
+node_modules/
+work_dir/
+signed-firefox-extensions/
+releases/
+
+# Browser extension icons (binary images)
+chrome-extension/icons/
+firefox-extension/icons/
+
+# Website & docs static files
+src/
+docs/
+
+# Tests
+test/
+
+# CI / IDE / OS
+.github/
+.git/
+.vscode/
+.idea/
+.cursor/
+.DS_Store
+Thumbs.db
+
+# Sensitive / environment
+.env
+.env.*
+config.json
+
+# Binaries & archives
+*.zip
+*.xpi
+*.crx
+*.png
+*.ico
+*.log
+*.tmp
+*.temp
+
+# Lock files
+package-lock.json
+
+# Misc
+CHANGELOG.md
+RELEASE_NOTES.md
+config.json.example
+.env.example
