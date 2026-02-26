@@ -32,12 +32,12 @@ window.I18nLocales['en-US'] = {
     },
     features: {
         title: 'Capabilities',
-        ws: { name: 'Real-time WebSocket', desc: 'Persistent bi-directional connection between AI agent and browser. Low-latency command execution with instant feedback.' },
-        discovery: { name: 'Auto Discovery', desc: 'Automatically detects server capabilities, endpoints, and authentication requirements. Zero manual configuration needed.' },
-        tabs: { name: 'Tab Management', desc: 'Full control over browser tabs: open, close, navigate, and sync tab state in real-time with the server.' },
-        inject: { name: 'Code Injection', desc: 'Execute JavaScript and inject CSS into any page. Extract DOM content, fill forms, and manipulate page elements remotely.' },
-        auth: { name: 'Adaptive Auth', desc: 'Automatically detects server auth requirements. Supports HMAC-SHA256 signing and no-auth modes seamlessly.' },
-        sse: { name: 'SSE Fallback', desc: 'Automatic degradation from WebSocket to SSE when connections fail. Circuit breaker protection with health monitoring.' },
+        browse: { name: 'AI Browses for You', desc: 'Let AI open pages, navigate websites, and search information on your behalf. No manual browsing needed.' },
+        form: { name: 'Auto-fill Forms', desc: 'AI fills out forms, submits applications, and handles repetitive input tasks automatically. Say goodbye to tedious data entry.' },
+        extract: { name: 'Content Extraction', desc: 'AI reads and extracts key information from any webpage \u2014 prices, articles, competitor data \u2014 and summarizes it for you.' },
+        multitab: { name: 'Multi-tab Orchestration', desc: 'AI manages multiple tabs simultaneously \u2014 compare products, research topics, or process tasks in parallel like a dedicated assistant.' },
+        zeroconfig: { name: 'Zero Config', desc: 'Install the extension and it just works. Auto-discovers the server, connects instantly \u2014 no ports, no config files, no hassle.' },
+        crossbrowser: { name: 'Cross-browser', desc: 'Works on Chrome, Edge, and Firefox. One solution for all major browsers \u2014 your whole team covered regardless of preference.' },
     },
     browsers: {
         title: 'Browser Support',
@@ -47,10 +47,10 @@ window.I18nLocales['en-US'] = {
     },
     workflow: {
         title: 'How It Works',
-        step1: { name: 'Install', desc: 'Download and load the extension in Chrome, Edge, or Firefox.' },
-        step2: { name: 'Start Server', desc: 'Run the built-in server or connect to a compatible AI agent framework.' },
-        step3: { name: 'Connect', desc: 'Extension auto-discovers the server and establishes WebSocket connection.' },
-        step4: { name: 'Automate', desc: 'AI agents control the browser: open pages, fill forms, extract data.' },
+        step1: { name: 'Install Extension', desc: 'Download and load the browser extension \u2014 the only step you do by hand.' },
+        step2: { name: 'Send to Agent', desc: 'Copy the deploy command and send it to your OpenClaw or other AI Agent. It handles server installation for you.' },
+        step3: { name: 'Auto Connect', desc: 'Agent sets up the server, the extension discovers it automatically \u2014 everything connects with zero config.' },
+        step4: { name: 'Just Talk', desc: 'Tell your Agent what to do \u2014 browse, fill forms, extract data. Chat is all you need.' },
     },
     arch: {
         title: 'Architecture',
