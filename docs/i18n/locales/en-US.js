@@ -4,6 +4,7 @@ window.I18nLocales['en-US'] = {
         features: 'FEATURES',
         browsers: 'BROWSERS',
         workflow: 'WORKFLOW',
+        skills: 'SKILLS',
         download: 'DOWNLOAD',
         github: 'GitHub',
         langToggle: '中',
@@ -78,6 +79,30 @@ window.I18nLocales['en-US'] = {
             badge: 'FULL FEATURED',
             desc: 'Complete AI agent framework with dedicated WS port, HMAC authentication, SSE support, and rate limiting built-in.',
             btn: 'View on GitHub',
+        },
+    },
+    skills: {
+        title: 'Extension Skills',
+        subtitle: 'Higher-level capabilities built on top of JS Eyes browser automation. Install individually \u2014 each adds new AI tools.',
+        installLabel: 'INSTALL',
+        xSearch: {
+            name: 'X Search',
+            toolsBadge: '4 AI TOOLS',
+            depBadge: 'REQUIRES JS-EYES',
+            desc: 'X.com (Twitter) content scraping \u2014 search tweets, get user timelines, fetch post details and home feed via browser automation.',
+            tool1Label: 'Search',
+            tool2Label: 'Profile',
+            tool3Label: 'Post',
+            tool4Label: 'Feed',
+        },
+        more: {
+            title: 'More Coming Soon',
+            desc: 'Build your own extension skills on top of JS Eyes. Check the docs for the skill development guide.',
+            btn: 'Contribute',
+        },
+        agentHint: {
+            title: 'Agent Auto-Discovery',
+            desc: 'AI agents with JS Eyes installed can discover and install extension skills automatically via the built-in <span class="text-[#FCD228] font-mono">js_eyes_discover_skills</span> tool. The skill registry is hosted at <a href="./skills.json" class="text-[#FCD228] underline hover:no-underline">js-eyes.com/skills.json</a>.',
         },
     },
     cta: {

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "generated": "2026-02-26T09:05:07.958Z",
+  "baseUrl": "https://js-eyes.com",
+  "parentSkill": {
+    "id": "js-eyes",
+    "version": "1.4.3"
+  },
+  "skills": [
+    {
+      "id": "x-search",
+      "name": "X Search",
+      "description": "X.com (Twitter) content scraping skill — search tweets, get user timelines, fetch post details and home feed via browser automation.",
+      "version": "1.0.0",
+      "emoji": "🔍",
+      "requires": {
+        "skills": [
+          "js-eyes"
+        ],
+        "bins": [
+          "node"
+        ]
+      },
+      "downloadUrl": "https://js-eyes.com/skills/x-search/x-search-skill.zip",
+      "homepage": "https://github.com/imjszhang/js-eyes",
+      "tools": [
+        "x_search_tweets",
+        "x_get_profile",
+        "x_get_post",
+        "x_get_home_feed"
+      ]
+    }
+  ]
+}

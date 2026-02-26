@@ -5,6 +5,7 @@ REPO="imjszhang/js-eyes"
 SKILL_NAME="js-eyes"
 SITE_URL="https://js-eyes.com"
 INSTALL_DIR="${JS_EYES_DIR:-./skills}"
+SUB_SKILL="${1:-}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}[info]${NC}  %s\n" "$1"; }
@@ -44,6 +45,95 @@ confirm() {
 # ── Prerequisites ─────────────────────────────────────────────────────
 command -v node >/dev/null 2>&1 || { err "Node.js is required. Install: https://nodejs.org/"; exit 1; }
 command -v npm  >/dev/null 2>&1 || { err "npm is required."; exit 1; }
+
+# ══════════════════════════════════════════════════════════════════════
+# Sub-skill install mode: bash -s -- <skill-id>
+# ══════════════════════════════════════════════════════════════════════
+if [ -n "$SUB_SKILL" ]; then
+  JS_EYES_ROOT="${INSTALL_DIR}/${SKILL_NAME}"
+  if [ ! -d "$JS_EYES_ROOT" ]; then
+    err "JS Eyes is not installed at ${JS_EYES_ROOT}."
+    err "Install js-eyes first: curl -fsSL ${SITE_URL}/install.sh | bash"
+    exit 1
+  fi
+
+  info "Installing extension skill: ${SUB_SKILL}"
+  info "Fetching skill registry..."
+  REGISTRY_JSON=$(http_get "${SITE_URL}/skills.json" 2>/dev/null || true)
+
+  if [ -z "$REGISTRY_JSON" ]; then
+    err "Could not fetch skill registry from ${SITE_URL}/skills.json"
+    exit 1
+  fi
+
+  DOWNLOAD_URL=$(printf '%s' "$REGISTRY_JSON" \
+    | grep -o "\"downloadUrl\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+    | while IFS= read -r line; do
+        url=$(printf '%s' "$line" | sed 's/.*"\(https\?:\/\/[^"]*\)".*/\1/')
+        id_check=$(printf '%s' "$REGISTRY_JSON" | grep -B5 "$url" | grep -o "\"id\"[[:space:]]*:[[:space:]]*\"${SUB_SKILL}\"" || true)
+        if [ -n "$id_check" ]; then printf '%s' "$url"; break; fi
+      done)
+
+  if [ -z "$DOWNLOAD_URL" ]; then
+    err "Skill '${SUB_SKILL}' not found in registry."
+    info "Available skills:"
+    printf '%s' "$REGISTRY_JSON" | grep '"id"' | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/  - \1/'
+    exit 1
+  fi
+
+  TARGET="${JS_EYES_ROOT}/skills/${SUB_SKILL}"
+  if [ -d "$TARGET" ]; then
+    warn "Directory already exists: ${TARGET}"
+    confirm "Overwrite?" || { info "Aborted."; exit 0; }
+    rm -rf "$TARGET"
+  fi
+  mkdir -p "$TARGET"
+
+  TMPDIR=$(mktemp -d)
+  trap 'rm -rf "$TMPDIR"' EXIT
+
+  SKILL_ZIP="${TMPDIR}/skill.zip"
+  info "Downloading ${SUB_SKILL} from ${DOWNLOAD_URL}..."
+  if ! try_download "$SKILL_ZIP" "$DOWNLOAD_URL"; then
+    err "Failed to download skill bundle."; exit 1
+  fi
+
+  info "Extracting..."
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -qo "$SKILL_ZIP" -d "$TARGET"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$SKILL_ZIP" "$TARGET"
+  else
+    err "unzip or python3 is required."; exit 1
+  fi
+
+  if [ -f "${TARGET}/package.json" ]; then
+    info "Installing dependencies..."
+    (cd "$TARGET" && npm install --production 2>/dev/null || npm install)
+  fi
+
+  ABSOLUTE_TARGET=$(cd "$TARGET" && pwd)
+  PLUGIN_PATH="${ABSOLUTE_TARGET}/openclaw-plugin"
+
+  ok "${SUB_SKILL} installed to: ${ABSOLUTE_TARGET}"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Next: register the plugin in ~/.openclaw/openclaw.json"
+  echo ""
+  echo "  Add to plugins.load.paths:"
+  echo "    \"${PLUGIN_PATH}\""
+  echo ""
+  echo "  Add to plugins.entries:"
+  echo "    \"${SUB_SKILL}\": { \"enabled\": true }"
+  echo ""
+  echo "  Then restart OpenClaw."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  exit 0
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# Main skill install (no argument)
+# ══════════════════════════════════════════════════════════════════════
 
 # ── Resolve latest version ────────────────────────────────────────────
 info "Fetching latest release info..."

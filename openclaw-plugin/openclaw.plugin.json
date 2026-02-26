@@ -26,6 +26,16 @@
         "type": "number",
         "default": 60,
         "description": "浏览器操作请求超时（秒）"
+      },
+      "skillsRegistryUrl": {
+        "type": "string",
+        "default": "https://js-eyes.com/skills.json",
+        "description": "扩展技能注册表 URL"
+      },
+      "skillsDir": {
+        "type": "string",
+        "default": "",
+        "description": "扩展技能安装目录（空值则使用技能包内的 skills/ 目录）"
       }
     }
   },
@@ -47,6 +57,18 @@
     "requestTimeout": {
       "label": "请求超时（秒）",
       "help": "单次浏览器操作的最大等待时间",
+      "advanced": true
+    },
+    "skillsRegistryUrl": {
+      "label": "技能注册表 URL",
+      "placeholder": "https://js-eyes.com/skills.json",
+      "help": "扩展技能注册表地址，用于发现和安装扩展技能",
+      "advanced": true
+    },
+    "skillsDir": {
+      "label": "技能安装目录",
+      "placeholder": "",
+      "help": "扩展技能的安装目录。留空则自动使用技能包根目录下的 skills/ 子目录",
       "advanced": true
     }
   }

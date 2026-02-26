@@ -4,6 +4,7 @@ window.I18nLocales['zh-CN'] = {
         features: '\u529f\u80fd',
         browsers: '\u6d4f\u89c8\u5668',
         workflow: '\u6d41\u7a0b',
+        skills: '\u6280\u80fd',
         download: '\u4e0b\u8f7d',
         github: 'GitHub',
         langToggle: 'EN',
@@ -78,6 +79,30 @@ window.I18nLocales['zh-CN'] = {
             badge: '\u5b8c\u6574\u7248',
             desc: '\u5b8c\u6574\u7684 AI Agent \u6846\u67b6\uff0c\u5e26\u6709\u72ec\u7acb WS \u7aef\u53e3\u3001HMAC \u8ba4\u8bc1\u3001SSE \u652f\u6301\u548c\u9650\u6d41\u529f\u80fd\u3002',
             btn: '\u5728 GitHub \u67e5\u770b',
+        },
+    },
+    skills: {
+        title: '\u6269\u5c55\u6280\u80fd',
+        subtitle: '\u57fa\u4e8e JS Eyes \u6d4f\u89c8\u5668\u81ea\u52a8\u5316\u6784\u5efa\u7684\u9ad8\u7ea7\u80fd\u529b\u3002\u53ef\u5355\u72ec\u5b89\u88c5\uff0c\u6bcf\u4e2a\u6280\u80fd\u4e3a AI \u6dfb\u52a0\u65b0\u5de5\u5177\u3002',
+        installLabel: '\u5b89\u88c5',
+        xSearch: {
+            name: 'X Search',
+            toolsBadge: '4 \u4e2a AI \u5de5\u5177',
+            depBadge: '\u4f9d\u8d56 JS-EYES',
+            desc: 'X.com (Twitter) \u5185\u5bb9\u6293\u53d6\u2014\u2014\u641c\u7d22\u63a8\u6587\u3001\u83b7\u53d6\u7528\u6237\u65f6\u95f4\u7ebf\u3001\u83b7\u53d6\u63a8\u6587\u8be6\u60c5\u548c\u9996\u9875\u63a8\u8350\u6d41\u3002',
+            tool1Label: '\u641c\u7d22',
+            tool2Label: '\u7528\u6237',
+            tool3Label: '\u63a8\u6587',
+            tool4Label: '\u63a8\u8350',
+        },
+        more: {
+            title: '\u66f4\u591a\u5373\u5c06\u5230\u6765',
+            desc: '\u57fa\u4e8e JS Eyes \u6784\u5efa\u4f60\u81ea\u5df1\u7684\u6269\u5c55\u6280\u80fd\u3002\u67e5\u770b\u6587\u6863\u4e86\u89e3\u6280\u80fd\u5f00\u53d1\u6307\u5357\u3002',
+            btn: '\u53c2\u4e0e\u8d21\u732e',
+        },
+        agentHint: {
+            title: 'Agent \u81ea\u52a8\u53d1\u73b0',
+            desc: '\u5df2\u5b89\u88c5 JS Eyes \u7684 AI Agent \u53ef\u4ee5\u901a\u8fc7\u5185\u7f6e\u7684 <span class="text-[#FCD228] font-mono">js_eyes_discover_skills</span> \u5de5\u5177\u81ea\u52a8\u53d1\u73b0\u548c\u5b89\u88c5\u6269\u5c55\u6280\u80fd\u3002\u6280\u80fd\u6ce8\u518c\u8868\u6258\u7ba1\u5728 <a href="./skills.json" class="text-[#FCD228] underline hover:no-underline">js-eyes.com/skills.json</a>\u3002',
         },
     },
     cta: {

@@ -97,6 +97,206 @@ const SKILL_BUNDLE_DIRS  = ['openclaw-plugin', 'server', 'clients'];
 const SKILL_ZIP_NAME     = 'js-eyes-skill.zip';
 const INSTALL_SCRIPTS    = ['install.sh', 'install.ps1'];
 
+const SKILLS_DIR = path.join(PROJECT_ROOT, 'skills');
+const SITE_URL   = 'https://js-eyes.com';
+
+const SUB_SKILL_EXCLUDE = [
+    'node_modules/**', '**/node_modules/**', 'work_dir/**', '**/work_dir/**',
+    'package-lock.json', '.git/**', '**/.git/**', '**/.DS_Store', '**/Thumbs.db',
+];
+
+// ── YAML Frontmatter Parser ─────────────────────────────────────────
+
+function parseSkillFrontmatter(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!match) return null;
+
+    const lines = match[1].split(/\r?\n/);
+    const root = {};
+    const stack = [{ obj: root, indent: -1 }];
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        if (!raw.trim() || raw.trim().startsWith('#')) continue;
+
+        const indent = raw.search(/\S/);
+        const trimmed = raw.trim();
+
+        while (stack.length > 1 && indent < stack[stack.length - 1].indent) {
+            stack.pop();
+        }
+        const parent = stack[stack.length - 1].obj;
+
+        if (trimmed.startsWith('- ')) {
+            const val = parseYamlValue(trimmed.slice(2).trim());
+            if (Array.isArray(parent)) {
+                parent.push(val);
+            }
+            continue;
+        }
+
+        const colonIdx = trimmed.indexOf(':');
+        if (colonIdx === -1) continue;
+
+        const key = trimmed.slice(0, colonIdx).trim();
+        const valPart = trimmed.slice(colonIdx + 1).trim();
+
+        if (valPart === '') {
+            let nextLine = '';
+            for (let j = i + 1; j < lines.length; j++) {
+                if (lines[j].trim()) { nextLine = lines[j]; break; }
+            }
+            const nextTrimmed = nextLine.trim();
+            const nextIndent = nextLine.search(/\S/);
+            if (nextTrimmed.startsWith('- ')) {
+                parent[key] = [];
+                stack.push({ obj: parent[key], indent: nextIndent >= 0 ? nextIndent : indent + 2 });
+            } else {
+                parent[key] = {};
+                stack.push({ obj: parent[key], indent: nextIndent >= 0 ? nextIndent : indent + 2 });
+            }
+        } else {
+            parent[key] = parseYamlValue(valPart);
+        }
+    }
+    return root;
+}
+
+function parseYamlValue(str) {
+    if (str === 'true') return true;
+    if (str === 'false') return false;
+    if (str === 'null') return null;
+    if (/^-?\d+$/.test(str)) return parseInt(str, 10);
+    if (/^-?\d+\.\d+$/.test(str)) return parseFloat(str);
+
+    let val = str;
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+    }
+    val = val.replace(/\\U([0-9A-Fa-f]{8})/g, (_, hex) =>
+        String.fromCodePoint(parseInt(hex, 16))
+    );
+    val = val.replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) =>
+        String.fromCodePoint(parseInt(hex, 16))
+    );
+    return val;
+}
+
+// ── Sub-skill discovery helpers ─────────────────────────────────────
+
+function discoverSubSkills() {
+    if (!fs.existsSync(SKILLS_DIR)) return [];
+
+    const entries = fs.readdirSync(SKILLS_DIR, { withFileTypes: true });
+    const skills = [];
+
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const skillDir = path.join(SKILLS_DIR, entry.name);
+        const skillMd = path.join(skillDir, 'SKILL.md');
+        if (!fs.existsSync(skillMd)) continue;
+
+        const meta = parseSkillFrontmatter(skillMd);
+        if (!meta || !meta.name) continue;
+
+        const pluginJson = path.join(skillDir, 'openclaw-plugin', 'openclaw.plugin.json');
+        let pluginMeta = null;
+        if (fs.existsSync(pluginJson)) {
+            try { pluginMeta = JSON.parse(fs.readFileSync(pluginJson, 'utf8')); } catch {}
+        }
+
+        const pluginEntry = path.join(skillDir, 'openclaw-plugin', 'index.mjs');
+        const tools = [];
+        if (fs.existsSync(pluginEntry)) {
+            const src = fs.readFileSync(pluginEntry, 'utf8');
+            const re = /name:\s*["']([a-z_]+)["']/g;
+            let m;
+            while ((m = re.exec(src)) !== null) tools.push(m[1]);
+        }
+
+        const oc = (meta.metadata && meta.metadata.openclaw) || {};
+        skills.push({
+            id: meta.name,
+            dir: skillDir,
+            dirName: entry.name,
+            name: (pluginMeta && pluginMeta.name) || meta.name,
+            description: meta.description || '',
+            version: meta.version || '1.0.0',
+            emoji: oc.emoji || '',
+            homepage: oc.homepage || '',
+            requires: oc.requires || {},
+            tools,
+        });
+    }
+    return skills;
+}
+
+// ── Build: Sub-skill zips ───────────────────────────────────────────
+
+async function buildSubSkillZips() {
+    const skills = discoverSubSkills();
+    if (skills.length === 0) return;
+
+    const archiver = require('archiver');
+
+    for (const skill of skills) {
+        const outDir = path.join(DOCS_DIR, 'skills', skill.dirName);
+        ensureDir(outDir);
+
+        const zipName = `${skill.id}-skill.zip`;
+        const outputFile = path.join(outDir, zipName);
+        if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+
+        const output = fs.createWriteStream(outputFile);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        await new Promise((resolve, reject) => {
+            output.on('close', resolve);
+            archive.on('error', reject);
+            archive.pipe(output);
+            archive.glob('**/*', {
+                cwd: skill.dir,
+                dot: false,
+                ignore: SUB_SKILL_EXCLUDE,
+            });
+            archive.finalize();
+        });
+
+        const stats = fs.statSync(outputFile);
+        console.log(`  ✓ Sub-skill bundle: skills/${skill.dirName}/${zipName} (${formatSize(stats.size)})`);
+    }
+}
+
+// ── Build: Skills registry (skills.json) ────────────────────────────
+
+async function buildSkillsRegistry() {
+    const skills = discoverSubSkills();
+    const version = getVersion();
+
+    const registry = {
+        version: 1,
+        generated: new Date().toISOString(),
+        baseUrl: SITE_URL,
+        parentSkill: { id: 'js-eyes', version },
+        skills: skills.map(s => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            version: s.version,
+            emoji: s.emoji,
+            requires: s.requires,
+            downloadUrl: `${SITE_URL}/skills/${s.dirName}/${s.id}-skill.zip`,
+            homepage: s.homepage,
+            tools: s.tools,
+        })),
+    };
+
+    const outputFile = path.join(DOCS_DIR, 'skills.json');
+    fs.writeFileSync(outputFile, JSON.stringify(registry, null, 2) + '\n', 'utf8');
+    console.log(`  ✓ Skills registry: skills.json (${skills.length} skill(s))`);
+}
+
 // ── Build: Site ──────────────────────────────────────────────────────
 
 async function buildSite(t, options = {}) {
@@ -154,6 +354,8 @@ async function buildSite(t, options = {}) {
     }
 
     await buildSkillZip();
+    await buildSubSkillZips();
+    await buildSkillsRegistry();
 
     console.log(`  ✓ ${t('site.done')}`);
 }

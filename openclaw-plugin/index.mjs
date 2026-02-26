@@ -49,6 +49,18 @@ const require = createRequire(import.meta.url);
 const { BrowserAutomation } = require("../clients/js-eyes-client.js");
 const { createServer } = require("../server/index.js");
 
+const nodeFs = require("node:fs");
+const nodePath = require("node:path");
+const nodeOs = require("node:os");
+const { execSync } = require("node:child_process");
+
+const PLUGIN_DIR = new URL(".", import.meta.url).pathname.replace(/\/$/, "");
+const SKILL_ROOT = nodePath.resolve(
+  process.platform === "win32" ? PLUGIN_DIR.replace(/^\//, "") : PLUGIN_DIR,
+  "..",
+);
+const DEFAULT_REGISTRY = "https://js-eyes.com/skills.json";
+
 export default function register(api) {
   const pluginCfg = api.pluginConfig ?? {};
 
@@ -56,6 +68,10 @@ export default function register(api) {
   const serverPort = pluginCfg.serverPort || 18080;
   const autoStart = pluginCfg.autoStartServer ?? true;
   const requestTimeout = pluginCfg.requestTimeout || 60;
+  const skillsRegistryUrl = pluginCfg.skillsRegistryUrl || DEFAULT_REGISTRY;
+  const skillsDir = pluginCfg.skillsDir
+    ? nodePath.resolve(pluginCfg.skillsDir)
+    : nodePath.join(SKILL_ROOT, "skills");
 
   let bot = null;
   let server = null;
@@ -336,6 +352,237 @@ export default function register(api) {
           return textResult("该标签页没有 Cookie。");
         }
         return textResult(JSON.stringify(cookies, null, 2));
+      },
+    },
+    { optional: true },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool: js_eyes_discover_skills
+  // ---------------------------------------------------------------------------
+
+  api.registerTool(
+    {
+      name: "js_eyes_discover_skills",
+      label: "JS Eyes: Discover Skills",
+      description:
+        "查询 JS Eyes 扩展技能注册表，列出可安装的扩展技能（如 X.com 搜索等）。返回每个技能的 ID、名称、描述、版本、提供的 AI 工具列表和安装命令。",
+      parameters: {
+        type: "object",
+        properties: {
+          registryUrl: {
+            type: "string",
+            description:
+              "自定义注册表 URL（默认使用 js-eyes.com/skills.json）",
+          },
+        },
+      },
+      async execute(_toolCallId, params) {
+        const url = params.registryUrl || skillsRegistryUrl;
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const registry = await resp.json();
+
+          if (!registry.skills || registry.skills.length === 0) {
+            return textResult("当前没有可用的扩展技能。");
+          }
+
+          const lines = [
+            `## JS Eyes 扩展技能 (${registry.skills.length} 个)`,
+            `Parent: js-eyes v${registry.parentSkill?.version || "?"}`,
+            "",
+          ];
+
+          for (const s of registry.skills) {
+            const installed = nodeFs.existsSync(
+              nodePath.join(skillsDir, s.id, "openclaw-plugin"),
+            );
+            const status = installed ? "✓ 已安装" : "○ 未安装";
+            lines.push(`### ${s.emoji || ""} ${s.name} (${s.id}) — ${status}`);
+            lines.push(`  ${s.description}`);
+            lines.push(`  版本: ${s.version}`);
+            if (s.tools && s.tools.length > 0) {
+              lines.push(`  AI 工具: ${s.tools.join(", ")}`);
+            }
+            if (s.requires?.skills?.length > 0) {
+              lines.push(`  依赖: ${s.requires.skills.join(", ")}`);
+            }
+            if (!installed) {
+              lines.push(`  安装: 调用 js_eyes_install_skill 工具，参数 skillId="${s.id}"`);
+              lines.push(`  或命令行: curl -fsSL https://js-eyes.com/install.sh | bash -s -- ${s.id}`);
+            }
+            lines.push("");
+          }
+
+          return textResult(lines.join("\n"));
+        } catch (err) {
+          return textResult(`获取技能注册表失败 (${url}): ${err.message}`);
+        }
+      },
+    },
+    { optional: true },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Tool: js_eyes_install_skill
+  // ---------------------------------------------------------------------------
+
+  api.registerTool(
+    {
+      name: "js_eyes_install_skill",
+      label: "JS Eyes: Install Skill",
+      description:
+        "下载并安装一个 JS Eyes 扩展技能。自动下载技能包、解压、安装依赖，并将插件路径注册到 OpenClaw 配置中。安装完成后需要重启 OpenClaw 才能使用新工具。",
+      parameters: {
+        type: "object",
+        properties: {
+          skillId: {
+            type: "string",
+            description: "要安装的技能 ID（如 'x-search'）",
+          },
+          force: {
+            type: "boolean",
+            description: "强制覆盖已有安装（默认 false）",
+          },
+        },
+        required: ["skillId"],
+      },
+      async execute(_toolCallId, params) {
+        const { skillId, force } = params;
+        try {
+          const resp = await fetch(skillsRegistryUrl);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const registry = await resp.json();
+
+          const skill = registry.skills?.find((s) => s.id === skillId);
+          if (!skill) {
+            const ids = (registry.skills || []).map((s) => s.id).join(", ");
+            return textResult(
+              `技能 "${skillId}" 未在注册表中找到。\n可用技能: ${ids || "无"}`,
+            );
+          }
+
+          const targetDir = nodePath.join(skillsDir, skillId);
+          if (nodeFs.existsSync(targetDir) && !force) {
+            return textResult(
+              `技能 "${skillId}" 已安装在 ${targetDir}。\n如需重新安装，请设置 force=true。`,
+            );
+          }
+
+          api.logger.info(`[js-eyes] Downloading skill: ${skillId}`);
+          const zipResp = await fetch(skill.downloadUrl);
+          if (!zipResp.ok) throw new Error(`Download failed: HTTP ${zipResp.status}`);
+          const zipBuffer = Buffer.from(await zipResp.arrayBuffer());
+
+          const tmpDir = nodePath.join(
+            nodeOs.tmpdir(),
+            `js-eyes-skill-${Date.now()}`,
+          );
+          nodeFs.mkdirSync(tmpDir, { recursive: true });
+          const zipPath = nodePath.join(tmpDir, `${skillId}.zip`);
+          nodeFs.writeFileSync(zipPath, zipBuffer);
+
+          if (nodeFs.existsSync(targetDir)) {
+            nodeFs.rmSync(targetDir, { recursive: true, force: true });
+          }
+          nodeFs.mkdirSync(targetDir, { recursive: true });
+
+          api.logger.info(`[js-eyes] Extracting to ${targetDir}`);
+          if (process.platform === "win32") {
+            execSync(
+              `powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force"`,
+              { windowsHide: true },
+            );
+          } else {
+            execSync(`unzip -qo "${zipPath}" -d "${targetDir}"`);
+          }
+
+          const pkgJson = nodePath.join(targetDir, "package.json");
+          if (nodeFs.existsSync(pkgJson)) {
+            api.logger.info(`[js-eyes] Installing dependencies for ${skillId}`);
+            try {
+              execSync("npm install --production", {
+                cwd: targetDir,
+                stdio: "pipe",
+                windowsHide: true,
+              });
+            } catch {
+              execSync("npm install", {
+                cwd: targetDir,
+                stdio: "pipe",
+                windowsHide: true,
+              });
+            }
+          }
+
+          nodeFs.rmSync(tmpDir, { recursive: true, force: true });
+
+          const pluginPath = nodePath
+            .join(targetDir, "openclaw-plugin")
+            .replace(/\\/g, "/");
+          let configUpdated = false;
+
+          const ocConfigPath = nodePath.join(
+            nodeOs.homedir(),
+            ".openclaw",
+            "openclaw.json",
+          );
+          if (nodeFs.existsSync(ocConfigPath)) {
+            try {
+              const cfg = JSON.parse(
+                nodeFs.readFileSync(ocConfigPath, "utf8"),
+              );
+              if (!cfg.plugins) cfg.plugins = {};
+              if (!cfg.plugins.load) cfg.plugins.load = {};
+              if (!Array.isArray(cfg.plugins.load.paths))
+                cfg.plugins.load.paths = [];
+              if (!cfg.plugins.entries) cfg.plugins.entries = {};
+
+              if (!cfg.plugins.load.paths.includes(pluginPath)) {
+                cfg.plugins.load.paths.push(pluginPath);
+              }
+              if (!cfg.plugins.entries[skillId]) {
+                cfg.plugins.entries[skillId] = { enabled: true };
+              }
+
+              nodeFs.writeFileSync(
+                ocConfigPath,
+                JSON.stringify(cfg, null, 2) + "\n",
+                "utf8",
+              );
+              configUpdated = true;
+            } catch (e) {
+              api.logger.warn(
+                `[js-eyes] Could not update openclaw.json: ${e.message}`,
+              );
+            }
+          }
+
+          const lines = [
+            `✓ 技能 "${skill.name}" (${skillId}) 安装成功！`,
+            `  安装路径: ${targetDir}`,
+            `  插件路径: ${pluginPath}`,
+            `  提供工具: ${(skill.tools || []).join(", ")}`,
+            "",
+          ];
+
+          if (configUpdated) {
+            lines.push("✓ 已自动更新 ~/.openclaw/openclaw.json");
+          } else {
+            lines.push("⚠ 需要手动添加到 ~/.openclaw/openclaw.json:");
+            lines.push(`  plugins.load.paths 添加: "${pluginPath}"`);
+            lines.push(
+              `  plugins.entries 添加: "${skillId}": { "enabled": true }`,
+            );
+          }
+          lines.push("");
+          lines.push("请重启 OpenClaw 以加载新技能。");
+
+          return textResult(lines.join("\n"));
+        } catch (err) {
+          return textResult(`安装技能 "${skillId}" 失败: ${err.message}`);
+        }
       },
     },
     { optional: true },
