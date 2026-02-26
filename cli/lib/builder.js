@@ -141,6 +141,18 @@ async function buildSite(t, options = {}) {
     }
     console.log('  ✓ Install scripts copied to docs/');
 
+    const version = getVersion();
+    const EXT_ASSETS = [
+        { src: path.join(DIST_DIR, `js-eyes-chrome-v${version}.zip`), dest: 'js-eyes-chrome-latest.zip' },
+        { src: path.join(DIST_DIR, `js-eyes-firefox-v${version}.xpi`), dest: 'js-eyes-firefox-latest.xpi' },
+    ];
+    for (const asset of EXT_ASSETS) {
+        if (fs.existsSync(asset.src)) {
+            fs.copyFileSync(asset.src, path.join(DOCS_DIR, asset.dest));
+            console.log(`  ✓ ${asset.dest} (from dist/)`);
+        }
+    }
+
     await buildSkillZip();
 
     console.log(`  ✓ ${t('site.done')}`);
