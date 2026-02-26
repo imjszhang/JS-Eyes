@@ -1,0 +1,20 @@
+{
+  "name": "js-eyes-example-x-search",
+  "version": "1.0.0",
+  "description": "JS-Eyes 应用案例：X.com (Twitter) 内容抓取，展示如何使用 JS-Eyes SDK 进行浏览器自动化",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "search": "node index.js search",
+    "profile": "node index.js profile",
+    "post": "node index.js post",
+    "home": "node index.js home"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
