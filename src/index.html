@@ -565,7 +565,7 @@
                                 <button id="skill-os-tab-win" onclick="switchSkillOS('win')" class="bg-gray-800 text-gray-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all hover:text-gray-200">Windows</button>
                             </div>
                             <div class="relative group">
-                                <div id="skill-deploy-cmd" class="bg-gray-900 border border-gray-700 rounded px-3 py-2.5 text-brand-yellow text-xs leading-relaxed select-all cursor-pointer group-hover:border-[#FCD228] transition-colors">curl -fsSL https://js-eyes.com/install.sh | bash -s -- js-search-x</div>
+                                <div id="skill-deploy-cmd" class="bg-gray-900 border border-gray-700 rounded px-3 py-2.5 text-brand-yellow text-xs leading-relaxed select-all cursor-pointer group-hover:border-[#FCD228] transition-colors">JS_EYES_SKILL=js-search-x curl -fsSL https://js-eyes.com/install.sh | bash</div>
                                 <button onclick="copySkillCmd()" class="absolute top-1/2 -translate-y-1/2 right-2 bg-gray-800 hover:bg-[#FCD228] hover:text-black text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-all border border-gray-600 hover:border-black">
                                     <span id="skill-copy-text" data-i18n="hero.deployCopy">Copy</span>
                                 </button>
@@ -795,7 +795,7 @@
     window.copyDeployCmd = copyDeployCmd;
 
     var SKILL_CMDS = {
-        unix: 'curl -fsSL https://js-eyes.com/install.sh | bash -s -- js-search-x',
+        unix: 'JS_EYES_SKILL=js-search-x curl -fsSL https://js-eyes.com/install.sh | bash',
         win:  '$env:JS_EYES_SKILL="js-search-x"; irm https://js-eyes.com/install.ps1 | iex'
     };
     var currentSkillOS = 'unix';

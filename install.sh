@@ -5,7 +5,7 @@ REPO="imjszhang/js-eyes"
 SKILL_NAME="js-eyes"
 SITE_URL="https://js-eyes.com"
 INSTALL_DIR="${JS_EYES_DIR:-./skills}"
-SUB_SKILL="${1:-}"
+SUB_SKILL="${JS_EYES_SKILL:-$1}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}[info]${NC}  %s\n" "$1"; }
@@ -47,7 +47,7 @@ command -v node >/dev/null 2>&1 || { err "Node.js is required. Install: https://
 command -v npm  >/dev/null 2>&1 || { err "npm is required."; exit 1; }
 
 # ══════════════════════════════════════════════════════════════════════
-# Sub-skill install mode: bash -s -- <skill-id>
+# Sub-skill install: JS_EYES_SKILL=<id> or bash -s -- <skill-id>
 # ══════════════════════════════════════════════════════════════════════
 if [ -n "$SUB_SKILL" ]; then
   JS_EYES_ROOT="${INSTALL_DIR}/${SKILL_NAME}"
@@ -163,24 +163,23 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 SKILL_ZIP="${TMPDIR}/skill.zip"
-ARCHIVE_TGZ="${TMPDIR}/archive.tar.gz"
-USE_ZIP=0
+ARCHIVE_ZIP="${TMPDIR}/archive.zip"
+USE_SKILL_ZIP=0
 
-URLS_ZIP="${SITE_URL}/js-eyes-skill.zip"
-URLS_TGZ=""
+URLS_SKILL_ZIP="${SITE_URL}/js-eyes-skill.zip"
+URLS_ARCHIVE=""
 if [ -n "$TAG" ]; then
-  URLS_TGZ="https://github.com/${REPO}/archive/refs/tags/${TAG}.tar.gz"
-  URLS_TGZ="${URLS_TGZ} https://cdn.jsdelivr.net/gh/${REPO}@${TAG}/."
+  URLS_ARCHIVE="https://github.com/${REPO}/archive/refs/tags/${TAG}.zip"
 else
-  URLS_TGZ="https://github.com/${REPO}/archive/refs/heads/main.tar.gz"
+  URLS_ARCHIVE="https://github.com/${REPO}/archive/refs/heads/main.zip"
 fi
 
 info "Downloading skill bundle..."
 
-if try_download "$SKILL_ZIP" $URLS_ZIP; then
-  USE_ZIP=1
-elif [ -n "$URLS_TGZ" ] && try_download "$ARCHIVE_TGZ" $URLS_TGZ; then
-  USE_ZIP=0
+if try_download "$SKILL_ZIP" $URLS_SKILL_ZIP; then
+  USE_SKILL_ZIP=1
+elif [ -n "$URLS_ARCHIVE" ] && try_download "$ARCHIVE_ZIP" $URLS_ARCHIVE; then
+  USE_SKILL_ZIP=0
 else
   err "All download sources failed. Check your network and try again."
   exit 1
@@ -189,17 +188,27 @@ fi
 # ── Extract ───────────────────────────────────────────────────────────
 info "Extracting skill bundle..."
 
-if [ "$USE_ZIP" = "1" ]; then
+extract_zip() {
+  local zipfile="$1" dest="$2"
   if command -v unzip >/dev/null 2>&1; then
-    unzip -qo "$SKILL_ZIP" -d "$TARGET"
+    unzip -qo "$zipfile" -d "$dest"
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$SKILL_ZIP" "$TARGET"
+    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$zipfile" "$dest"
   else
     err "unzip or python3 is required to extract the skill bundle zip."; exit 1
   fi
+}
+
+if [ "$USE_SKILL_ZIP" = "1" ]; then
+  extract_zip "$SKILL_ZIP" "$TARGET"
 else
-  tar xzf "$ARCHIVE_TGZ" -C "$TMPDIR"
-  EXTRACTED=$(find "$TMPDIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+  EXTRACT_DIR="${TMPDIR}/extract"
+  mkdir -p "$EXTRACT_DIR"
+  extract_zip "$ARCHIVE_ZIP" "$EXTRACT_DIR"
+  EXTRACTED=""
+  for d in "$EXTRACT_DIR"/*/; do
+    [ -d "$d" ] && EXTRACTED="${d%/}" && break
+  done
   if [ -z "$EXTRACTED" ]; then
     err "Failed to extract archive."; exit 1
   fi

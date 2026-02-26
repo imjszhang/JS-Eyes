@@ -108,7 +108,7 @@ For details (why it’s flagged, what the code does, how to report false positiv
 
 ### Option A — One-command install (recommended)
 
-Download the skill bundle and install dependencies automatically. The script tries multiple download sources (Cloudflare CDN, GitHub, jsDelivr) with automatic fallback.
+Download the skill bundle and install dependencies automatically. The script tries multiple download sources (site CDN, GitHub) with automatic fallback.
 
 **Linux / macOS:**
 

@@ -227,8 +227,11 @@ https://js-eyes.com/skills.json
 **One-command install:**
 
 ```bash
-# Linux / macOS
+# Linux / macOS (arg)
 curl -fsSL https://js-eyes.com/install.sh | bash -s -- js-search-x
+
+# Linux / macOS (env var, same as PowerShell)
+JS_EYES_SKILL=js-search-x curl -fsSL https://js-eyes.com/install.sh | bash
 
 # Windows PowerShell
 $env:JS_EYES_SKILL="js-search-x"; irm https://js-eyes.com/install.ps1 | iex
