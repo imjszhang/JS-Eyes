@@ -90,9 +90,16 @@ function getApiConfig() {
     return null;
 }
 
+// ── Skill bundle contents (matches .clawhubignore inclusion) ─────────
+
+const SKILL_BUNDLE_FILES = ['SKILL.md', 'SECURITY.md', 'package.json', 'LICENSE'];
+const SKILL_BUNDLE_DIRS  = ['openclaw-plugin', 'server', 'clients'];
+const SKILL_ZIP_NAME     = 'js-eyes-skill.zip';
+const INSTALL_SCRIPTS    = ['install.sh', 'install.ps1'];
+
 // ── Build: Site ──────────────────────────────────────────────────────
 
-function buildSite(t, options = {}) {
+async function buildSite(t, options = {}) {
     const { clean = false } = options;
 
     console.log('');
@@ -126,7 +133,49 @@ function buildSite(t, options = {}) {
     }
     console.log(`  ✓ ${t('site.nojekyll')}`);
 
+    for (const script of INSTALL_SCRIPTS) {
+        const src = path.join(PROJECT_ROOT, script);
+        if (fs.existsSync(src)) {
+            fs.copyFileSync(src, path.join(DOCS_DIR, script));
+        }
+    }
+    console.log('  ✓ Install scripts copied to docs/');
+
+    await buildSkillZip();
+
     console.log(`  ✓ ${t('site.done')}`);
+}
+
+// ── Build: Skill bundle zip ──────────────────────────────────────────
+
+async function buildSkillZip() {
+    const archiver = require('archiver');
+    const outputFile = path.join(DOCS_DIR, SKILL_ZIP_NAME);
+
+    if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+
+    const output = fs.createWriteStream(outputFile);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    await new Promise((resolve, reject) => {
+        output.on('close', resolve);
+        archive.on('error', reject);
+        archive.pipe(output);
+
+        for (const file of SKILL_BUNDLE_FILES) {
+            const src = path.join(PROJECT_ROOT, file);
+            if (fs.existsSync(src)) archive.file(src, { name: file });
+        }
+        for (const dir of SKILL_BUNDLE_DIRS) {
+            const src = path.join(PROJECT_ROOT, dir);
+            if (fs.existsSync(src)) archive.directory(src, dir);
+        }
+
+        archive.finalize();
+    });
+
+    const stats = fs.statSync(outputFile);
+    console.log(`  ✓ Skill bundle: ${SKILL_ZIP_NAME} (${formatSize(stats.size)})`);
 }
 
 // ── Build: Chrome ────────────────────────────────────────────────────

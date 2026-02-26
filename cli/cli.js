@@ -65,7 +65,7 @@ async function cmdBuild(sub, flags) {
 
     switch (target) {
         case 'site':
-            buildSite(t, { clean });
+            await buildSite(t, { clean });
             break;
         case 'chrome':
             await buildChrome(t);
@@ -81,7 +81,7 @@ async function cmdBuild(sub, flags) {
             console.log('========================================');
             console.log('');
             console.log('[1/3] Site');
-            buildSite(t, { clean });
+            await buildSite(t, { clean });
             console.log('');
             console.log('[2/3] Chrome');
             await buildChrome(t);
@@ -146,7 +146,7 @@ async function cmdSync(flags) {
         if (!noBuild) {
             log('');
             log(`── ${t('git.stepBuild')} ──`);
-            buildSite(t, { clean: true });
+            await buildSite(t, { clean: true });
         } else {
             log(t('git.buildSkipped'));
         }

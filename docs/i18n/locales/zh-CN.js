@@ -16,6 +16,8 @@ window.I18nLocales['zh-CN'] = {
         desc: '\u8ba9 AI \u667a\u80fd\u4f53\u62e5\u6709\u6d4f\u89c8\u5668\u7684<span class="bg-black text-brand-yellow px-1">\u771f\u5b9e\u89c6\u89d2</span>\u3002\u57fa\u4e8e WebSocket \u7684\u6d4f\u89c8\u5668\u81ea\u52a8\u5316\u63a7\u5236\u6269\u5c55\uff0c\u9002\u914d\u4efb\u4f55 AI \u6846\u67b6\u3002\u539f\u751f\u652f\u6301 <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> \u63d2\u4ef6\u3002',
         deployLabel: '\u79d2\u901f\u90e8\u7f72',
         deployHint: '在终端中运行',
+        deployCmdUnix: 'curl -fsSL https://js-eyes.com/install.sh | bash',
+        deployCmdWin: 'irm https://js-eyes.com/install.ps1 | iex',
         deployCopy: '\u590d\u5236',
         deployResult1: '\u2713 js-eyes \u5df2\u5b89\u88c5',
         deployResult2: '\u2713 \u63d2\u4ef6\u5df2\u6ce8\u518c',

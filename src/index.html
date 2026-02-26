@@ -237,7 +237,7 @@
                             <button id="os-tab-win" onclick="switchOS('win')" class="bg-gray-800 text-gray-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all hover:text-gray-200">Windows</button>
                         </div>
                         <div class="relative group">
-                            <div id="deploy-cmd" class="bg-gray-900 border border-gray-700 rounded px-3 py-2.5 text-brand-yellow text-xs leading-relaxed select-all cursor-pointer group-hover:border-[#FCD228] transition-colors">curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash</div>
+                            <div id="deploy-cmd" class="bg-gray-900 border border-gray-700 rounded px-3 py-2.5 text-brand-yellow text-xs leading-relaxed select-all cursor-pointer group-hover:border-[#FCD228] transition-colors">curl -fsSL https://js-eyes.com/install.sh | bash</div>
                             <button id="deploy-copy-btn" onclick="copyDeployCmd()" class="absolute top-1/2 -translate-y-1/2 right-2 bg-gray-800 hover:bg-[#FCD228] hover:text-black text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-all border border-gray-600 hover:border-black">
                                 <span id="deploy-copy-text" data-i18n="hero.deployCopy">Copy</span>
                             </button>
@@ -640,15 +640,26 @@
 
     initThreeJS();
 
-    var deployCmds = {
-        unix: 'curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash',
-        win:  'irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex'
+    var FALLBACK_CMDS = {
+        unix: 'curl -fsSL https://js-eyes.com/install.sh | bash',
+        win:  'irm https://js-eyes.com/install.ps1 | iex'
     };
     var currentOS = 'unix';
 
+    function getDeployCmds() {
+        if (typeof I18nManager !== 'undefined') {
+            return {
+                unix: I18nManager.t('hero.deployCmdUnix') || FALLBACK_CMDS.unix,
+                win:  I18nManager.t('hero.deployCmdWin')  || FALLBACK_CMDS.win
+            };
+        }
+        return FALLBACK_CMDS;
+    }
+
     function switchOS(os) {
         currentOS = os;
-        document.getElementById('deploy-cmd').textContent = deployCmds[os];
+        var cmds = getDeployCmds();
+        document.getElementById('deploy-cmd').textContent = cmds[os];
         var unixTab = document.getElementById('os-tab-unix');
         var winTab = document.getElementById('os-tab-win');
         if (os === 'unix') {
@@ -661,8 +672,12 @@
     }
     window.switchOS = switchOS;
 
+    window.addEventListener('localechange', function () { switchOS(currentOS); });
+
     if (navigator.platform && /win/i.test(navigator.platform)) {
         switchOS('win');
+    } else {
+        switchOS('unix');
     }
 
     function copyDeployCmd() {

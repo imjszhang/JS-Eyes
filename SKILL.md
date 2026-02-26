@@ -108,28 +108,33 @@ For details (why it’s flagged, what the code does, how to report false positiv
 
 ### Option A — One-command install (recommended)
 
-Download the skill bundle from GitHub and install dependencies automatically:
+Download the skill bundle and install dependencies automatically. The script tries multiple download sources (Cloudflare CDN, GitHub, jsDelivr) with automatic fallback.
 
 **Linux / macOS:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash
+curl -fsSL https://js-eyes.com/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex
+irm https://js-eyes.com/install.ps1 | iex
 ```
+
+> **Alternative (GitHub direct):** If the above is unavailable, use the GitHub raw URL:
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash
+> ```
 
 By default, the skill is installed to `./skills/js-eyes`. To change the location:
 
 ```bash
 # Linux / macOS
-JS_EYES_DIR=~/.openclaw/skills curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash
+JS_EYES_DIR=~/.openclaw/skills curl -fsSL https://js-eyes.com/install.sh | bash
 
 # Windows PowerShell
-$env:JS_EYES_DIR="$HOME\.openclaw\skills"; irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex
+$env:JS_EYES_DIR="$HOME\.openclaw\skills"; irm https://js-eyes.com/install.ps1 | iex
 ```
 
 Set `JS_EYES_FORCE=1` to skip the overwrite confirmation (useful for CI).

@@ -16,6 +16,8 @@ window.I18nLocales['en-US'] = {
         desc: 'Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser. WebSocket-powered automation for any AI framework. First-class <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> plugin support.',
         deployLabel: 'DEPLOY IN SECONDS',
         deployHint: 'Run in your terminal',
+        deployCmdUnix: 'curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash',
+        deployCmdWin: 'irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex',
         deployCopy: 'Copy',
         deployResult1: '\u2713 js-eyes installed',
         deployResult2: '\u2713 Plugin registered',
