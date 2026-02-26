@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * js-search-x - X.com (Twitter) 搜索抓取统一入口
+ * js-search-x — X.com (Twitter) 搜索抓取统一入口
  *
- * 封装 x-search、x-profile、x-post、x-home 等功能，提供统一的 CLI 入口。
+ * 封装 search、profile、post、home 等功能，提供统一的 CLI 入口。
  *
  * 使用方法:
  *   node index.js <command> [args...] [options]

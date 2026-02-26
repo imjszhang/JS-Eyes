@@ -1,5 +1,5 @@
 ---
-name: x-search
+name: js-search-x
 description: X.com (Twitter) content scraping skill — search tweets, get user timelines, fetch post details and home feed via browser automation.
 version: 1.0.0
 metadata:
@@ -13,7 +13,7 @@ metadata:
         - node
 ---
 
-# x-search
+# js-search-x
 
 X.com (Twitter) 内容抓取技能 — 基于 js-eyes 浏览器自动化，通过 GraphQL API 拦截 + DOM 回退双策略获取推文数据。
 
@@ -74,16 +74,16 @@ const feed = await getHomeFeed(browser, {
 
 ```bash
 # 搜索
-node skills/x-search/index.js search "AI agent" --sort latest --max-pages 3
+node skills/js-search-x/index.js search "AI agent" --sort latest --max-pages 3
 
 # 用户时间线
-node skills/x-search/index.js profile elonmusk --max-pages 10
+node skills/js-search-x/index.js profile elonmusk --max-pages 10
 
 # 推文详情
-node skills/x-search/index.js post https://x.com/user/status/123 --with-thread
+node skills/js-search-x/index.js post https://x.com/user/status/123 --with-thread
 
 # 首页推荐
-node skills/x-search/index.js home --feed foryou --max-pages 5
+node skills/js-search-x/index.js home --feed foryou --max-pages 5
 ```
 
 ## 工作原理
@@ -98,7 +98,7 @@ node skills/x-search/index.js home --feed foryou --max-pages 5
 ## 目录结构
 
 ```
-skills/x-search/
+skills/js-search-x/
 ├── SKILL.md                  # 技能描述（本文件）
 ├── package.json
 ├── index.js                  # CLI 入口

@@ -1,5 +1,5 @@
 {
-  "name": "js-eyes-example-x-search",
+  "name": "js-search-x",
   "version": "1.0.0",
   "description": "JS-Eyes 应用案例：X.com (Twitter) 内容抓取，展示如何使用 JS-Eyes SDK 进行浏览器自动化",
   "private": true,

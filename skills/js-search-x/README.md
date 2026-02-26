@@ -21,7 +21,7 @@
 
 ```bash
 # 在 js-eyes 根目录安装依赖（ws 模块）
-cd examples/x-search
+cd skills/js-search-x
 npm install
 ```
 

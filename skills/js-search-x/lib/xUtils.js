@@ -1,7 +1,7 @@
 /**
  * X.com (Twitter) 共享工具模块
  * 
- * 提供 x-search.js 和 x-profile.js 等 X.com 相关脚本的通用功能：
+ * 提供 X.com 相关脚本（x-search.js、x-profile.js 等）的通用功能：
  * - GraphQL API 常量（features、bearer token）
  * - 浏览器端推文 DOM 解析代码片段
  * - 浏览器端 GraphQL 推文解析代码片段

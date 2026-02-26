@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * x-search 编程 API
+ * js-search-x 编程 API
  *
  * 提供 4 个纯函数接口，由调用者传入 BrowserAutomation 实例，
  * 返回结构化数据，不做 process.exit、不写文件。

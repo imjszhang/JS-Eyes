@@ -1,6 +1,6 @@
 {
-  "id": "x-search",
-  "name": "X Search",
+  "id": "js-search-x",
+  "name": "JS Search X",
   "description": "X.com (Twitter) 内容抓取工具 — 搜索推文、获取用户时间线、推文详情和首页推荐（依赖 js-eyes 技能）",
   "version": "1.0.0",
   "configSchema": {

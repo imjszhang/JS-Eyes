@@ -1,7 +1,7 @@
 {
-  "name": "x-search",
+  "name": "js-search-x",
   "version": "1.0.0",
-  "description": "OpenClaw plugin for x-search — X.com content scraping via js-eyes",
+  "description": "OpenClaw plugin for js-search-x — X.com content scraping via js-eyes",
   "type": "module",
   "main": "index.mjs",
   "license": "MIT",

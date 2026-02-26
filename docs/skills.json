@@ -8,8 +8,8 @@
   },
   "skills": [
     {
-      "id": "x-search",
-      "name": "X Search",
+      "id": "js-search-x",
+      "name": "JS Search X",
       "description": "X.com (Twitter) content scraping skill — search tweets, get user timelines, fetch post details and home feed via browser automation.",
       "version": "1.0.0",
       "emoji": "🔍",
@@ -21,7 +21,7 @@
           "node"
         ]
       },
-      "downloadUrl": "https://js-eyes.com/skills/x-search/x-search-skill.zip",
+      "downloadUrl": "https://js-eyes.com/skills/js-search-x/js-search-x-skill.zip",
       "homepage": "https://github.com/imjszhang/js-eyes",
       "tools": [
         "x_search_tweets",

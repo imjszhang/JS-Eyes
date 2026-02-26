@@ -246,11 +246,11 @@ js-eyes ships with built-in extension skills that add higher-level capabilities 
 
 | Skill | Location | Description |
 |-------|----------|-------------|
-| **x-search** | `skills/x-search/` | X.com (Twitter) content scraping — search tweets, user timelines, post details, home feed |
+| **js-search-x** | `skills/js-search-x/` | X.com (Twitter) content scraping — search tweets, user timelines, post details, home feed |
 
 Extension skills depend on js-eyes for browser automation and can be registered as separate OpenClaw plugins. See each skill's `SKILL.md` for setup instructions.
 
-To register the x-search plugin, add its `openclaw-plugin` path to your `openclaw.json`:
+To register the js-search-x plugin, add its `openclaw-plugin` path to your `openclaw.json`:
 
 ```json
 {
@@ -258,12 +258,12 @@ To register the x-search plugin, add its `openclaw-plugin` path to your `opencla
     "load": {
       "paths": [
         "/path/to/skills/js-eyes/openclaw-plugin",
-        "/path/to/skills/js-eyes/skills/x-search/openclaw-plugin"
+        "/path/to/skills/js-eyes/skills/js-search-x/openclaw-plugin"
       ]
     },
     "entries": {
       "js-eyes": { "enabled": true },
-      "x-search": { "enabled": true }
+      "js-search-x": { "enabled": true }
     }
   }
 }
