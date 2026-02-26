@@ -92,26 +92,68 @@ js-eyes/
 - **Node.js** >= 16
 - **A supported browser**: Chrome 88+ / Edge 88+ / Firefox 58+
 
-## Deploy to .openclaw
+## Security & VirusTotal
 
-Install the skill via ClawHub:
+This skill only communicates with **user-configured** endpoints (default: `localhost:18080`). It does not call any external APIs or send telemetry. Static analysis (e.g. VirusTotal Code Insight) may flag it as “suspicious” because it uses `fetch`/WebSocket and dynamic URLs — the same patterns used for local automation.
+
+If ClawHub shows a VirusTotal warning, you can install with:
+
+```bash
+clawhub install js-eyes --force
+```
+
+For details (why it’s flagged, what the code does, how to report false positives), see [SECURITY.md](./SECURITY.md).
+
+## Install
+
+### Option A — One-command install (recommended)
+
+Download the skill bundle from GitHub and install dependencies automatically:
+
+**Linux / macOS:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex
+```
+
+By default, the skill is installed to `./skills/js-eyes`. To change the location:
+
+```bash
+# Linux / macOS
+JS_EYES_DIR=~/.openclaw/skills curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash
+
+# Windows PowerShell
+$env:JS_EYES_DIR="$HOME\.openclaw\skills"; irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex
+```
+
+Set `JS_EYES_FORCE=1` to skip the overwrite confirmation (useful for CI).
+
+### Option B — ClawHub
 
 ```bash
 clawhub install js-eyes
 ```
 
+> ClawHub may show a VirusTotal warning due to `fetch`/WebSocket patterns used for **local-only** automation. See [Security & VirusTotal](#security--virustotal). Use `clawhub install js-eyes --force` if prompted.
+
 ClawHub installs into `./skills` under your current working directory (or your configured OpenClaw workspace). The bundle is self-contained — it includes the plugin, WebSocket server, and client SDK.
 
-**1. Install Node.js dependencies** — the `ws` package is required at runtime:
+Run `npm install` in the skill root if `ws` was not auto-installed via the Skills UI:
 
 ```bash
-cd ./skills/js-eyes   # from the dir where you ran clawhub install; or ~/.openclaw/skills/js-eyes if using legacy sync
+cd ./skills/js-eyes
 npm install
 ```
 
-> Run `npm install` if `ws` was not auto-installed via the Skills UI.
+### Register the plugin
 
-**2. Register the plugin** in `~/.openclaw/openclaw.json`. The path must point to the `openclaw-plugin` subdirectory inside the skill, **not** the skill root:
+Add the plugin to `~/.openclaw/openclaw.json`. The path must point to the `openclaw-plugin` subdirectory inside the skill, **not** the skill root:
 
 | Install method | `<SKILL_ROOT>` | Plugin path for `plugins.load.paths` |
 |----------------|----------------|--------------------------------------|
@@ -141,7 +183,7 @@ Example config (replace the path with your actual install location — use `pwd`
 
 > **Path note**: `index.mjs` imports from `../server/` and `../clients/` relative to itself, so the bundle directory layout must be preserved. Point `paths` at the `openclaw-plugin` subdirectory only.
 
-**3. Restart OpenClaw** to load the plugin.
+Restart OpenClaw to load the plugin.
 
 > **For developers**: clone the [full repository](https://github.com/imjszhang/js-eyes) and point `plugins.load.paths` to the `openclaw-plugin` directory inside your clone.
 

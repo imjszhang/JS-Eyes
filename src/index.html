@@ -226,21 +226,29 @@
                     WebSocket-powered automation for any AI framework. First-class <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> plugin support.
                 </p>
 
-                <div class="brutal-card p-4 bg-black text-brand-yellow font-mono text-xs w-full sm:w-80 shadow-brutal text-left">
-                    <div class="flex gap-2 mb-2 border-b border-gray-700 pb-2">
-                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                <div class="brutal-card p-0 bg-black text-brand-yellow font-mono text-xs w-full sm:w-96 shadow-brutal text-left overflow-hidden">
+                    <div class="bg-[#E74C3C] text-white px-4 py-2 flex items-center gap-2 font-bold text-xs uppercase tracking-wider">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span data-i18n="hero.deployLabel">DEPLOY IN SECONDS</span>
                     </div>
-                    <div class="space-y-1">
-                        <p data-i18n="hero.termLine1">> npm run server</p>
-                        <p class="text-green-400" data-i18n="hero.termLine2">&#10003; Server on :18080</p>
-                        <p class="text-green-400" data-i18n="hero.termLine3">&#10003; WebSocket ready</p>
-                        <p class="text-blue-400" data-i18n="hero.termLine4">&#10003; Extension connected</p>
-                        <p class="text-green-400" data-i18n="hero.termLine5">&#10003; 3 tabs synced</p>
-                        <p class="text-gray-500 mt-1" data-i18n="hero.termLine6">> openclaw install js-eyes</p>
-                        <p class="text-[#E74C3C]" data-i18n="hero.termLine7">&#10003; JS Eyes plugin registered</p>
-                        <p><span class="animate-blink">_</span></p>
+                    <div class="p-4">
+                        <div class="flex gap-1 mb-2">
+                            <button id="os-tab-unix" onclick="switchOS('unix')" class="bg-[#FCD228] text-black px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all">Linux / macOS</button>
+                            <button id="os-tab-win" onclick="switchOS('win')" class="bg-gray-800 text-gray-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all hover:text-gray-200">Windows</button>
+                        </div>
+                        <div class="relative group">
+                            <div id="deploy-cmd" class="bg-gray-900 border border-gray-700 rounded px-3 py-2.5 text-brand-yellow text-xs leading-relaxed select-all cursor-pointer group-hover:border-[#FCD228] transition-colors">curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash</div>
+                            <button id="deploy-copy-btn" onclick="copyDeployCmd()" class="absolute top-1/2 -translate-y-1/2 right-2 bg-gray-800 hover:bg-[#FCD228] hover:text-black text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-all border border-gray-600 hover:border-black">
+                                <span id="deploy-copy-text" data-i18n="hero.deployCopy">Copy</span>
+                            </button>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-800 space-y-1 text-[11px]">
+                            <p class="text-green-400" data-i18n="hero.deployResult1">&#10003; js-eyes installed</p>
+                            <p class="text-green-400" data-i18n="hero.deployResult2">&#10003; Plugin registered</p>
+                            <p class="text-blue-400" data-i18n="hero.deployResult3">&#10003; Server auto-started on :18080</p>
+                            <p class="text-green-400" data-i18n="hero.deployResult4">&#10003; Extension connected — 3 tabs synced</p>
+                            <p><span class="animate-blink">_</span></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -254,9 +262,9 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span data-i18n="hero.btnDocs">Documentation</span>
                 </a>
-                <a href="https://openclaw.ai/" target="_blank" class="brutal-btn-openclaw px-8 py-4 text-lg gap-3">
+                <a href="https://openclaw.ai/docs" target="_blank" class="brutal-btn-openclaw px-8 py-4 text-lg gap-3">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
-                    <span data-i18n="hero.btnOpenclaw">OpenClaw Plugin</span>
+                    <span data-i18n="hero.btnOpenclaw">OpenClaw Docs</span>
                 </a>
             </div>
         </section>
@@ -631,6 +639,46 @@
     }
 
     initThreeJS();
+
+    var deployCmds = {
+        unix: 'curl -fsSL https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.sh | bash',
+        win:  'irm https://raw.githubusercontent.com/imjszhang/js-eyes/main/install.ps1 | iex'
+    };
+    var currentOS = 'unix';
+
+    function switchOS(os) {
+        currentOS = os;
+        document.getElementById('deploy-cmd').textContent = deployCmds[os];
+        var unixTab = document.getElementById('os-tab-unix');
+        var winTab = document.getElementById('os-tab-win');
+        if (os === 'unix') {
+            unixTab.className = unixTab.className.replace(/bg-gray-800 text-gray-400/g, 'bg-[#FCD228] text-black');
+            winTab.className = winTab.className.replace(/bg-\[#FCD228\] text-black/g, 'bg-gray-800 text-gray-400');
+        } else {
+            winTab.className = winTab.className.replace(/bg-gray-800 text-gray-400/g, 'bg-[#FCD228] text-black');
+            unixTab.className = unixTab.className.replace(/bg-\[#FCD228\] text-black/g, 'bg-gray-800 text-gray-400');
+        }
+    }
+    window.switchOS = switchOS;
+
+    if (navigator.platform && /win/i.test(navigator.platform)) {
+        switchOS('win');
+    }
+
+    function copyDeployCmd() {
+        var cmd = document.getElementById('deploy-cmd').textContent;
+        var btn = document.getElementById('deploy-copy-text');
+        var origText = btn.textContent;
+        navigator.clipboard.writeText(cmd).then(function () {
+            btn.textContent = '✓ Copied!';
+            btn.parentElement.classList.add('bg-[#FCD228]', 'text-black', 'border-black');
+            setTimeout(function () {
+                btn.textContent = origText;
+                btn.parentElement.classList.remove('bg-[#FCD228]', 'text-black', 'border-black');
+            }, 1500);
+        });
+    }
+    window.copyDeployCmd = copyDeployCmd;
 
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
