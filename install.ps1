@@ -78,9 +78,11 @@ function Install-JsEyesSkill {
 
     try {
         $ZipPath = Join-Path $TmpDir "skill.zip"
-        Write-Info "Downloading $SkillId from $($Skill.downloadUrl)..."
+        $Urls = @($Skill.downloadUrl)
+        if ($Skill.downloadUrlFallback) { $Urls += $Skill.downloadUrlFallback }
+        Write-Info "Downloading $SkillId..."
 
-        if (-not (Try-Download -Dest $ZipPath -Urls @($Skill.downloadUrl))) {
+        if (-not (Try-Download -Dest $ZipPath -Urls $Urls)) {
             Write-Err "Failed to download skill bundle."
             return
         }

@@ -471,9 +471,19 @@ export default function register(api) {
           }
 
           api.logger.info(`[js-eyes] Downloading skill: ${skillId}`);
-          const zipResp = await fetch(skill.downloadUrl);
-          if (!zipResp.ok) throw new Error(`Download failed: HTTP ${zipResp.status}`);
-          const zipBuffer = Buffer.from(await zipResp.arrayBuffer());
+          const urls = skill.downloadUrlFallback
+            ? [skill.downloadUrl, skill.downloadUrlFallback]
+            : [skill.downloadUrl];
+          let zipBuffer = null;
+          for (const url of urls) {
+            const zipResp = await fetch(url);
+            if (zipResp.ok) {
+              zipBuffer = Buffer.from(await zipResp.arrayBuffer());
+              break;
+            }
+            api.logger.warn(`[js-eyes] Download failed (${url}): HTTP ${zipResp.status}`);
+          }
+          if (!zipBuffer) throw new Error("Download failed for all URLs");
 
           const tmpDir = nodePath.join(
             nodeOs.tmpdir(),

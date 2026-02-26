@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-02-26T09:05:07.958Z",
+  "generated": "2026-02-26T10:09:53.928Z",
   "baseUrl": "https://js-eyes.com",
   "parentSkill": {
     "id": "js-eyes",
@@ -22,6 +22,7 @@
         ]
       },
       "downloadUrl": "https://js-eyes.com/skills/js-search-x/js-search-x-skill.zip",
+      "downloadUrlFallback": "https://cdn.jsdelivr.net/gh/imjszhang/js-eyes@main/docs/skills/js-search-x/js-search-x-skill.zip",
       "homepage": "https://github.com/imjszhang/js-eyes",
       "tools": [
         "x_search_tweets",

@@ -279,17 +279,22 @@ async function buildSkillsRegistry() {
         generated: new Date().toISOString(),
         baseUrl: SITE_URL,
         parentSkill: { id: 'js-eyes', version },
-        skills: skills.map(s => ({
-            id: s.id,
-            name: s.name,
-            description: s.description,
-            version: s.version,
-            emoji: s.emoji,
-            requires: s.requires,
-            downloadUrl: `${SITE_URL}/skills/${s.dirName}/${s.id}-skill.zip`,
-            homepage: s.homepage,
-            tools: s.tools,
-        })),
+        skills: skills.map(s => {
+            const primary = `${SITE_URL}/skills/${s.dirName}/${s.id}-skill.zip`;
+            const fallback = `https://cdn.jsdelivr.net/gh/imjszhang/js-eyes@main/docs/skills/${s.dirName}/${s.id}-skill.zip`;
+            return {
+                id: s.id,
+                name: s.name,
+                description: s.description,
+                version: s.version,
+                emoji: s.emoji,
+                requires: s.requires,
+                downloadUrl: primary,
+                downloadUrlFallback: fallback,
+                homepage: s.homepage,
+                tools: s.tools,
+            };
+        }),
     };
 
     const outputFile = path.join(DOCS_DIR, 'skills.json');

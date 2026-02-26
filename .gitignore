@@ -20,6 +20,8 @@ dist/
 build/
 *.xpi
 *.zip
+# Allow skill zips so fallback download (jsDelivr/GitHub raw) works
+!docs/skills/**/*.zip
 signed-firefox-extensions/
 
 # IDE

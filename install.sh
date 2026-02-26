@@ -66,15 +66,16 @@ if [ -n "$SUB_SKILL" ]; then
     exit 1
   fi
 
-  DOWNLOAD_URL=$(printf '%s' "$REGISTRY_JSON" \
-    | grep -o "\"downloadUrl\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
-    | while IFS= read -r line; do
-        url=$(printf '%s' "$line" | sed 's/.*"\(https\?:\/\/[^"]*\)".*/\1/')
-        id_check=$(printf '%s' "$REGISTRY_JSON" | grep -B5 "$url" | grep -o "\"id\"[[:space:]]*:[[:space:]]*\"${SUB_SKILL}\"" || true)
-        if [ -n "$id_check" ]; then printf '%s' "$url"; break; fi
-      done)
+  DOWNLOAD_URLS=$(node -e "
+    let r; try { r = JSON.parse(process.argv[1]); } catch (_) { process.exit(1); }
+    const s = r.skills && r.skills.find(x => x.id === process.argv[2]);
+    if (!s) process.exit(1);
+    const urls = [s.downloadUrl];
+    if (s.downloadUrlFallback) urls.push(s.downloadUrlFallback);
+    console.log(urls.join('\n'));
+  " "$REGISTRY_JSON" "$SUB_SKILL" 2>/dev/null) || true
 
-  if [ -z "$DOWNLOAD_URL" ]; then
+  if [ -z "$DOWNLOAD_URLS" ]; then
     err "Skill '${SUB_SKILL}' not found in registry."
     info "Available skills:"
     printf '%s' "$REGISTRY_JSON" | grep '"id"' | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/  - \1/'
@@ -93,8 +94,8 @@ if [ -n "$SUB_SKILL" ]; then
   trap 'rm -rf "$TMPDIR"' EXIT
 
   SKILL_ZIP="${TMPDIR}/skill.zip"
-  info "Downloading ${SUB_SKILL} from ${DOWNLOAD_URL}..."
-  if ! try_download "$SKILL_ZIP" "$DOWNLOAD_URL"; then
+  info "Downloading ${SUB_SKILL}..."
+  if ! try_download "$SKILL_ZIP" $DOWNLOAD_URLS; then
     err "Failed to download skill bundle."; exit 1
   fi
 
