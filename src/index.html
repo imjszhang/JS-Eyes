@@ -796,7 +796,7 @@
 
     var SKILL_CMDS = {
         unix: 'curl -fsSL https://js-eyes.com/install.sh | bash -s -- js-search-x',
-        win:  'irm https://js-eyes.com/install.ps1 | iex; Install-JsEyesSkill js-search-x'
+        win:  '$env:JS_EYES_SKILL="js-search-x"; irm https://js-eyes.com/install.ps1 | iex'
     };
     var currentSkillOS = 'unix';
 
