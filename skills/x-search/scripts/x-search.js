@@ -43,8 +43,9 @@
  *   - X.com 搜索需要登录状态
  */
 
-const { BrowserAutomation } = require('../../../clients/js-eyes-client');
+const { BrowserAutomation } = require('../lib/js-eyes-client');
 const path = require('path');
+const { searchTweets } = require('../lib/api');
 const {
     DEFAULT_GRAPHQL_FEATURES,
     BEARER_TOKEN,
@@ -681,13 +682,12 @@ function printUsage() {
 // printSummary 已移至 xUtils 模块（支持 title 参数）
 
 // ============================================================================
-// 主流程
+// 主流程（CLI 入口 — 调用 lib/api.js）
 // ============================================================================
 
 async function main() {
     const options = parseArgs();
 
-    // 处理 --resume 模式
     if (options.resume) {
         return await resumeSearch(options);
     }
@@ -697,18 +697,15 @@ async function main() {
         process.exit(1);
     }
 
-    // 验证 sort 参数
     if (!['top', 'latest', 'media'].includes(options.sort)) {
         console.error(`错误: 无效的排序方式 "${options.sort}"，可选: top / latest / media`);
         process.exit(1);
     }
 
-    // 构建搜索 URL 和查询字符串
     const fullQuery = buildFullQuery(options.keyword, options);
     const searchUrl = buildSearchUrl(options.keyword, options);
     const product = sortToProduct(options.sort);
 
-    // 确定输出路径和目录
     let outputPath = options.output;
     let outputDir;
     if (!outputPath) {
@@ -724,7 +721,6 @@ async function main() {
         outputDir = path.dirname(outputPath);
     }
 
-    // 打印搜索信息
     console.log('='.repeat(60));
     console.log('X.com 搜索工具');
     console.log('='.repeat(60));
@@ -748,411 +744,20 @@ async function main() {
     console.log('='.repeat(60));
 
     const browser = new BrowserAutomation(options.browserServer);
-    let tabId = null;
-    const allTweets = [];
-    const seenIds = new Set();
-
-    const safeExecuteScript = createSafeExecuteScript(browser);
-
-    // 自适应翻页间隔
-    let pageDelay = 1500; // 起始 1.5s
-    const MIN_PAGE_DELAY = 1500;
-    const MAX_PAGE_DELAY = 5000;
 
     try {
-        // ================================================================
-        // Phase 1: 打开搜索页（域级别 Tab 复用）
-        // ================================================================
-        console.log('\n[Phase 1] 打开搜索页面...');
-        
-        const tabResult = await acquireXTab(browser, searchUrl);
-        tabId = tabResult.tabId;
-        
-        // 如果是新建或同域内导航，等待页面加载
-        if (!tabResult.isReused || tabResult.navigated) {
-            console.log('等待页面加载...');
-            try {
-                await waitForPageLoad(browser, tabId, { timeout: 30000 });
-                console.log('✓ 页面加载完成');
-            } catch (e) {
-                console.warn(`⚠ 等待页面加载超时，继续执行: ${e.message}`);
-            }
-        }
-        
-        // 等待 X.com 完成 client-side 渲染
-        const renderWait = tabResult.isReused && !tabResult.navigated ? 1000 : 3000;
-        console.log(`等待页面渲染 (${renderWait / 1000}s)...`);
-        await new Promise(resolve => setTimeout(resolve, renderWait));
+        const result = await searchTweets(browser, options.keyword, {
+            ...options,
+            logger: console,
+            _outputDir: outputDir,
+        });
 
-        // ================================================================
-        // Phase 2: 动态发现 GraphQL 参数（带缓存）
-        // ================================================================
-        let graphqlFailed = !ENABLE_GRAPHQL_SEARCH; // GraphQL 停用时直接标记为失败，跳到 DOM 提取
-        
-        if (!ENABLE_GRAPHQL_SEARCH) {
-            console.log('\n[Phase 2] GraphQL 搜索已停用，将使用 DOM 提取方式');
-        } else {
-        console.log('\n[Phase 2] 获取 GraphQL 参数...');
-        let graphqlParams = {};
-        
-        // 先尝试读缓存
-        const cached = await loadGraphQLCache('SearchTimeline');
-        if (cached && cached.queryId) {
-            graphqlParams = cached;
-            console.log(`✓ 使用缓存的 queryId: ${cached.queryId}`);
-        } else {
-            console.log('缓存未命中，执行动态发现...');
-            try {
-                const discoveryResult = await safeExecuteScript(
-                    tabId, 
-                    buildDiscoverGraphQLParamsScript(), 
-                    { timeout: 15 }
-                );
-                
-                if (discoveryResult?.success) {
-                    if (discoveryResult.queryId) {
-                        graphqlParams.queryId = discoveryResult.queryId;
-                        console.log(`✓ 动态发现 queryId: ${discoveryResult.queryId}`);
-                    }
-                    if (discoveryResult.features) {
-                        graphqlParams.features = discoveryResult.features;
-                        console.log(`✓ 动态发现 features (${Object.keys(discoveryResult.features).length} 项)`);
-                    }
-                    if (discoveryResult.variables) {
-                        graphqlParams.variables = discoveryResult.variables;
-                        console.log(`✓ 动态发现 variables 模板 (${Object.keys(discoveryResult.variables).length} 项)`);
-                    }
-                    
-                    // 保存缓存
-                    if (graphqlParams.queryId) {
-                        await saveGraphQLCache('SearchTimeline', graphqlParams);
-                    }
-                }
-            } catch (e) {
-                console.warn(`⚠ 动态发现失败，使用默认参数: ${e.message}`);
-            }
-        }
-        
-        if (!graphqlParams.queryId) {
-            console.log(`使用 fallback queryId: ${FALLBACK_QUERY_ID}`);
-        }
-
-        // ================================================================
-        // Phase 3: GraphQL API 搜索（优先策略）
-        // ================================================================
-        console.log('\n[Phase 3] 使用 GraphQL API 搜索...');
-        
-        graphqlFailed = false;
-        let cursor = null;
-        let cacheInvalidated = false; // 是否已触发过一次缓存失效重新发现
-        
-        // 连续 429 计数
-        let consecutive429Count = 0;
-        const MAX_CONSECUTIVE_429 = 3;
-        const LONG_PAUSE_MS = 5 * 60 * 1000; // 5 分钟
-        
-        for (let page = 1; page <= options.maxPages; page++) {
-            console.log(`正在获取第 ${page}/${options.maxPages} 页...`);
-            
-            const startTime = Date.now();
-            
-            const graphqlResult = await retryWithBackoff(
-                async (attempt) => {
-                    return await safeExecuteScript(
-                        tabId,
-                        buildGraphQLSearchScript(fullQuery, product, cursor, graphqlParams),
-                        { timeout: 30 }
-                    );
-                },
-                {
-                    maxRetries: 3,
-                    baseDelay: 2000,
-                    onRetry: (attempt, delay, reason) => {
-                        const errMsg = reason?.error || reason?.message || '未知';
-                        console.log(`  重试 #${attempt}（等待 ${Math.round(delay / 1000)}s）: ${errMsg}`);
-                    }
-                }
-            );
-            
-            const elapsed = Date.now() - startTime;
-            
-            if (!graphqlResult || !graphqlResult.success) {
-                const errMsg = graphqlResult?.error || '未知错误';
-                const statusCode = graphqlResult?.statusCode;
-                
-                // 400/404 错误可能是 queryId 过期或 features 缺失，尝试清除缓存重新发现一次
-                if ((statusCode === 400 || statusCode === 404) && !cacheInvalidated) {
-                    cacheInvalidated = true;
-                    const failedQueryId = graphqlParams.queryId;
-                    console.warn(`⚠ API 返回 ${statusCode}，queryId 可能已过期，清除缓存并重新发现...`);
-                    await clearGraphQLCache('SearchTimeline');
-                    
-                    try {
-                        let rediscovery = await safeExecuteScript(
-                            tabId,
-                            buildDiscoverGraphQLParamsScript(),
-                            { timeout: 15 }
-                        );
-                        
-                        // 如果重新发现的 queryId 与失败的相同，说明页面/bundle 缓存了旧版本
-                        // 强制刷新页面以获取最新的 JS bundle 和 queryId
-                        if (rediscovery?.success && rediscovery.queryId === failedQueryId) {
-                            console.log('重新发现的 queryId 与失败的相同，强制刷新页面...');
-                            try {
-                                await safeExecuteScript(tabId, 'performance.clearResourceTimings(); void 0;', { timeout: 5 });
-                                await browser.openUrl(searchUrl, tabId);
-                                try {
-                                    await waitForPageLoad(browser, tabId, { timeout: 30000 });
-                                } catch (e) { /* 超时继续 */ }
-                                await new Promise(resolve => setTimeout(resolve, 4000));
-                                
-                                rediscovery = await safeExecuteScript(
-                                    tabId,
-                                    buildDiscoverGraphQLParamsScript(),
-                                    { timeout: 60 }
-                                );
-                            } catch (reloadErr) {
-                                console.warn(`⚠ 页面刷新失败: ${reloadErr.message}`);
-                            }
-                        }
-                        
-                        if (rediscovery?.success && rediscovery.queryId && rediscovery.queryId !== failedQueryId) {
-                            graphqlParams.queryId = rediscovery.queryId;
-                            graphqlParams.features = rediscovery.features || graphqlParams.features;
-                            graphqlParams.variables = rediscovery.variables || graphqlParams.variables;
-                            await saveGraphQLCache('SearchTimeline', graphqlParams);
-                            console.log(`✓ 重新发现 queryId: ${rediscovery.queryId}，重试当前页...`);
-                            page--; // 重试当前页
-                            continue;
-                        } else if (rediscovery?.success && rediscovery.queryId) {
-                            // 刷新后仍是同一个 queryId，可能是 API 端临时问题，仍然尝试重试
-                            graphqlParams.queryId = rediscovery.queryId;
-                            graphqlParams.features = rediscovery.features || graphqlParams.features;
-                            graphqlParams.variables = rediscovery.variables || graphqlParams.variables;
-                            console.log(`⚠ 刷新后 queryId 仍为 ${rediscovery.queryId}，尝试最后一次重试...`);
-                            page--;
-                            continue;
-                        }
-                    } catch (e) {
-                        console.warn(`⚠ 重新发现失败: ${e.message}`);
-                    }
-                }
-                
-                // 连续 429 保护
-                if (statusCode === 429) {
-                    consecutive429Count++;
-                    console.warn(`⚠ 遇到速率限制 (429)，连续 ${consecutive429Count} 次`);
-                    
-                    if (consecutive429Count >= MAX_CONSECUTIVE_429) {
-                        console.log(`连续 ${MAX_CONSECUTIVE_429} 次 429，暂停 5 分钟后继续...`);
-                        
-                        await saveProgress(outputDir, {
-                            type: 'x_search',
-                            keyword: options.keyword,
-                            fullQuery,
-                            product,
-                            sort: options.sort,
-                            cursor,
-                            currentPage: page - 1,
-                            totalCollected: allTweets.length,
-                            seenIds: [...seenIds],
-                            options: {
-                                maxPages: options.maxPages,
-                                minLikes: options.minLikes,
-                                minRetweets: options.minRetweets,
-                                minReplies: options.minReplies,
-                                lang: options.lang,
-                                from: options.from,
-                                to: options.to,
-                                since: options.since,
-                                until: options.until,
-                                excludeReplies: options.excludeReplies,
-                                excludeRetweets: options.excludeRetweets,
-                                hasLinks: options.hasLinks
-                            },
-                            graphqlParams,
-                            outputPath,
-                            updatedAt: new Date().toISOString()
-                        });
-                        
-                        await new Promise(resolve => setTimeout(resolve, LONG_PAUSE_MS));
-                        consecutive429Count = 0;
-                        page--; // 重试当前页
-                        continue;
-                    }
-                } else {
-                    console.warn(`⚠ GraphQL API 调用失败 (第 ${page} 页): ${errMsg}`);
-                    if (page === 1) graphqlFailed = true;
-                    break;
-                }
-            }
-            
-            if (!graphqlResult || !graphqlResult.success) {
-                if (page === 1) graphqlFailed = true;
-                break;
-            } else {
-                consecutive429Count = 0;
-            }
-            
-            const { tweets: pageTweets, nextCursor, queryId } = graphqlResult;
-            
-            if (page === 1 && queryId) {
-                console.log(`✓ 使用 queryId: ${queryId}`);
-            }
-            
-            if (Array.isArray(pageTweets) && pageTweets.length > 0) {
-                let newCount = 0;
-                const newTweets = [];
-                pageTweets.forEach(tweet => {
-                    if (!seenIds.has(tweet.tweetId)) {
-                        seenIds.add(tweet.tweetId);
-                        allTweets.push(tweet);
-                        newTweets.push(tweet);
-                        newCount++;
-                    }
-                });
-                console.log(`✓ 第 ${page} 页获取 ${pageTweets.length} 条推文 (${newCount} 条新增)`);
-                
-                // 增量保存到临时文件
-                await appendPartialTweets(outputDir, newTweets);
-                await saveProgress(outputDir, {
-                    type: 'x_search',
-                    keyword: options.keyword,
-                    fullQuery,
-                    product,
-                    sort: options.sort,
-                    cursor: nextCursor,
-                    currentPage: page,
-                    totalCollected: allTweets.length,
-                    seenIds: [...seenIds],
-                    options: {
-                        maxPages: options.maxPages,
-                        minLikes: options.minLikes,
-                        minRetweets: options.minRetweets,
-                        minReplies: options.minReplies,
-                        lang: options.lang,
-                        from: options.from,
-                        to: options.to,
-                        since: options.since,
-                        until: options.until,
-                        excludeReplies: options.excludeReplies,
-                        excludeRetweets: options.excludeRetweets,
-                        hasLinks: options.hasLinks
-                    },
-                    graphqlParams,
-                    outputPath,
-                    updatedAt: new Date().toISOString()
-                });
-            } else {
-                console.log(`第 ${page} 页无更多结果，停止翻页`);
-                break;
-            }
-            
-            if (nextCursor) {
-                cursor = nextCursor;
-            } else {
-                console.log('无更多分页游标，停止翻页');
-                break;
-            }
-            
-            // 自适应翻页间隔
-            if (page < options.maxPages) {
-                if (elapsed > 5000) {
-                    pageDelay = Math.min(pageDelay * 1.5, MAX_PAGE_DELAY);
-                } else {
-                    pageDelay = Math.max(pageDelay * 0.9, MIN_PAGE_DELAY);
-                }
-                console.log(`等待 ${(pageDelay / 1000).toFixed(1)} 秒...`);
-                await new Promise(resolve => setTimeout(resolve, pageDelay));
-            }
-        }
-        } // end if (ENABLE_GRAPHQL_SEARCH)
-
-        // ================================================================
-        // Phase 4: DOM 提取（GraphQL 停用或失败且无结果时执行）
-        // ================================================================
-        if (graphqlFailed && allTweets.length === 0) {
-            console.log(`\n[Phase ${ENABLE_GRAPHQL_SEARCH ? '4' : '2'}] 使用 DOM 提取推文...`);
-            
-            const domResult = await safeExecuteScript(tabId, buildFirstPageScript(), { timeout: 60 });
-            
-            if (domResult?.success && domResult.tweets?.length > 0) {
-                const newTweets = [];
-                domResult.tweets.forEach(tweet => {
-                    if (!seenIds.has(tweet.tweetId)) {
-                        seenIds.add(tweet.tweetId);
-                        allTweets.push(tweet);
-                        newTweets.push(tweet);
-                    }
-                });
-                console.log(`✓ DOM 回退获取到 ${domResult.tweetCount} 条推文`);
-                
-                // 保存 DOM 回退的结果
-                await appendPartialTweets(outputDir, newTweets);
-            } else {
-                const errMsg = domResult?.error || 'DOM 未提取到推文';
-                console.warn(`⚠ DOM 回退也失败: ${errMsg}`);
-            }
-        }
-
-        // ================================================================
-        // 释放标签页（默认保留供下次复用）
-        // ================================================================
-        await releaseXTab(browser, tabId);
-
-        // ================================================================
-        // 应用过滤并保存最终结果
-        // ================================================================
-        let filteredTweets = allTweets;
-        
-        // 应用最低互动数过滤
-        if (options.minLikes > 0 || options.minRetweets > 0 || options.minReplies > 0) {
-            filteredTweets = allTweets.filter(t => 
-                t.stats.likes >= options.minLikes &&
-                t.stats.retweets >= options.minRetweets &&
-                t.stats.replies >= options.minReplies
-            );
-            if (filteredTweets.length < allTweets.length) {
-                console.log(`\n已过滤不满足互动数条件的推文: ${allTweets.length} → ${filteredTweets.length}`);
-            }
-        }
-
-        // 构建结果对象
-        const result = {
-            searchKeyword: options.keyword,
-            searchUrl: searchUrl,
-            searchOptions: {
-                sort: options.sort,
-                maxPages: options.maxPages,
-                minLikes: options.minLikes,
-                minRetweets: options.minRetweets,
-                minReplies: options.minReplies,
-                lang: options.lang,
-                from: options.from,
-                to: options.to,
-                since: options.since,
-                until: options.until,
-                excludeReplies: options.excludeReplies,
-                excludeRetweets: options.excludeRetweets,
-                hasLinks: options.hasLinks
-            },
-            timestamp: new Date().toISOString(),
-            totalResults: filteredTweets.length,
-            results: filteredTweets
-        };
-
-        // 格式化并保存
         const output = options.pretty
             ? JSON.stringify(result, null, 2)
             : JSON.stringify(result);
-        
         await saveToFile(outputPath, output);
-        
-        // 清理临时文件
         await cleanupTempFiles(outputDir);
-
-        // 打印摘要
-        printSummary(filteredTweets, '搜索完成');
+        printSummary(result.results, '搜索完成');
 
     } catch (error) {
         console.error('\n✗ 搜索失败:');
@@ -1161,14 +766,7 @@ async function main() {
             console.error('\n堆栈跟踪:');
             console.error(error.stack);
         }
-        
-        // 释放标签页
-        if (tabId) {
-            try { await releaseXTab(browser, tabId); } catch (e) {}
-        } else {
-            browser.disconnect();
-        }
-        
+        browser.disconnect();
         process.exit(1);
     }
 }
@@ -1464,14 +1062,6 @@ async function resumeSearch(options) {
     printSummary(filteredTweets, '搜索完成');
 }
 
-// 运行主函数
-if (require.main === module) {
-    main().catch(error => {
-        console.error('未处理的错误:', error);
-        process.exit(1);
-    });
-}
-
 module.exports = {
     main,
     parseArgs,
@@ -1479,5 +1069,18 @@ module.exports = {
     buildFullQuery,
     buildQueryOperators,
     sortToProduct,
-    retryWithBackoff
+    retryWithBackoff,
+    buildDiscoverGraphQLParamsScript,
+    buildGraphQLSearchScript,
+    buildFirstPageScript,
+    buildDomExtractionScript,
+    FALLBACK_QUERY_ID,
+    ENABLE_GRAPHQL_SEARCH
 };
+
+if (require.main === module) {
+    main().catch(error => {
+        console.error('未处理的错误:', error);
+        process.exit(1);
+    });
+}

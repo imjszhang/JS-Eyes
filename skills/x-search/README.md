@@ -54,7 +54,7 @@ node index.js home --feed following --max-pages 5
 ### 使用的 JS-Eyes API
 
 ```javascript
-const { BrowserAutomation } = require('../../clients/js-eyes-client');
+const { BrowserAutomation } = require('./lib/js-eyes-client');
 
 const browser = new BrowserAutomation('ws://localhost:18080');
 await browser.connect();

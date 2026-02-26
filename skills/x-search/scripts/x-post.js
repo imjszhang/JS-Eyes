@@ -33,8 +33,9 @@
  *   - 默认不关闭 tab，下次运行可秒级复用已有的 x.com 标签页
  */
 
-const { BrowserAutomation } = require('../../../clients/js-eyes-client');
+const { BrowserAutomation } = require('../lib/js-eyes-client');
 const path = require('path');
+const { getPost } = require('../lib/api');
 const {
     DEFAULT_GRAPHQL_FEATURES,
     BEARER_TOKEN,
@@ -1060,7 +1061,6 @@ async function main() {
         process.exit(1);
     }
 
-    // 解析推文 ID
     const tweetIds = [];
     for (const input of options.tweetInputs) {
         const id = extractTweetId(input);
@@ -1071,7 +1071,6 @@ async function main() {
         tweetIds.push(id);
     }
 
-    // 确定输出路径和目录
     let outputPath = options.output;
     let outputDir;
     if (!outputPath) {
@@ -1088,7 +1087,6 @@ async function main() {
         outputDir = path.dirname(outputPath);
     }
 
-    // 打印信息
     console.log('='.repeat(60));
     console.log('X.com 帖子内容抓取工具');
     console.log('='.repeat(60));
@@ -1103,415 +1101,34 @@ async function main() {
     console.log('='.repeat(60));
 
     const browser = new BrowserAutomation(options.browserServer);
-    const safeExecuteScript = createSafeExecuteScript(browser);
-    let tabId = null;
-    const allResults = [];
 
     try {
-        // ================================================================
-        // Phase 1: 获取 Tab（域级别复用）
-        // ================================================================
-        console.log('\n[Phase 1] 获取浏览器标签页...');
-        
-        // 导航到第一条推文的详情页（帮助发现 queryId）
-        const firstTweetUrl = `https://x.com/i/status/${tweetIds[0]}`;
-        const tabResult = await acquireXTab(browser, firstTweetUrl);
-        tabId = tabResult.tabId;
-        
-        if (!tabResult.isReused || tabResult.navigated) {
-            console.log('等待页面加载...');
-            try {
-                await waitForPageLoad(browser, tabId, { timeout: 30000 });
-                console.log('✓ 页面加载完成');
-            } catch (e) {
-                console.warn(`⚠ 等待页面加载超时，继续执行: ${e.message}`);
-            }
-        }
-        
-        const renderWait = tabResult.isReused && !tabResult.navigated ? 1000 : 4000;
-        console.log(`等待页面渲染 (${renderWait / 1000}s)...`);
-        await new Promise(resolve => setTimeout(resolve, renderWait));
-
-        // ================================================================
-        // Phase 2: 发现 GraphQL 参数（带缓存）
-        // ================================================================
-        console.log('\n[Phase 2] 获取 GraphQL 参数...');
-        let graphqlParams = {};
-        
-        const cacheKey = 'TweetDetail';
-        const cached = await loadGraphQLCache(cacheKey);
-        if (cached && (cached.tweetDetailQueryId || cached.tweetResultByRestIdQueryId)) {
-            graphqlParams = cached;
-            console.log(`✓ 使用缓存的 queryId: TweetDetail=${cached.tweetDetailQueryId || '无'}, TweetResultByRestId=${cached.tweetResultByRestIdQueryId || '无'}`);
-        } else {
-            console.log('缓存未命中，执行动态发现...');
-            try {
-                const discoveryResult = await safeExecuteScript(
-                    tabId,
-                    buildDiscoverTweetQueryIdsScript(),
-                    { timeout: 60 }
-                );
-                
-                if (discoveryResult?.success) {
-                    if (discoveryResult.tweetDetailQueryId) {
-                        graphqlParams.tweetDetailQueryId = discoveryResult.tweetDetailQueryId;
-                        console.log(`✓ TweetDetail queryId: ${discoveryResult.tweetDetailQueryId}`);
-                    }
-                    if (discoveryResult.tweetResultByRestIdQueryId) {
-                        graphqlParams.tweetResultByRestIdQueryId = discoveryResult.tweetResultByRestIdQueryId;
-                        console.log(`✓ TweetResultByRestId queryId: ${discoveryResult.tweetResultByRestIdQueryId}`);
-                    }
-                    if (discoveryResult.features) {
-                        graphqlParams.features = discoveryResult.features;
-                        console.log(`✓ 动态发现 features (${Object.keys(discoveryResult.features).length} 项)`);
-                    }
-                    
-                    // 保存缓存
-                    if (graphqlParams.tweetDetailQueryId || graphqlParams.tweetResultByRestIdQueryId) {
-                        await saveGraphQLCache(cacheKey, graphqlParams);
-                    }
-                }
-            } catch (e) {
-                console.warn(`⚠ 动态发现失败: ${e.message}`);
-            }
-        }
-        
-        const tweetDetailQueryId = graphqlParams.tweetDetailQueryId;
-        const restIdQueryId = graphqlParams.tweetResultByRestIdQueryId;
-        
-        if (!tweetDetailQueryId && !restIdQueryId) {
-            console.error('✗ 无法获取 TweetDetail 或 TweetResultByRestId queryId，请确保已登录 X.com');
-            process.exit(1);
-        }
-
-        // ================================================================
-        // Phase 3: 逐条抓取推文
-        // ================================================================
-        console.log(`\n[Phase 3] 抓取推文内容 (共 ${tweetIds.length} 条)...`);
-        
-        let cacheInvalidated = false;
-        
-        for (let i = 0; i < tweetIds.length; i++) {
-            const tweetId = tweetIds[i];
-            console.log(`\n正在抓取第 ${i + 1}/${tweetIds.length} 条: ${tweetId}`);
-            
-            let tweetResult = null;
-            let graphqlFailed = false;
-            
-            const collectReplies = options.withReplies > 0;
-            
-            // 策略 1: 使用 TweetDetail API（含线程和回复）
-            if (tweetDetailQueryId) {
-                tweetResult = await retryWithBackoff(
-                    async () => {
-                        return await safeExecuteScript(
-                            tabId,
-                            buildTweetDetailScript(
-                                tweetId,
-                                tweetDetailQueryId,
-                                graphqlParams.features,
-                                options.withThread,
-                                collectReplies
-                            ),
-                            { timeout: 30 }
-                        );
-                    },
-                    {
-                        maxRetries: 3,
-                        baseDelay: 3000,
-                        maxDelay: 30000,
-                        onRetry: (attempt, delay, reason) => {
-                            const errMsg = reason?.error || reason?.message || '未知';
-                            console.log(`  重试 #${attempt}（等待 ${Math.round(delay / 1000)}s）: ${errMsg}`);
-                        }
-                    }
-                );
-                
-                // 400 错误可能是 queryId 过期
-                if (tweetResult && !tweetResult.success && tweetResult.statusCode === 400 && !cacheInvalidated) {
-                    cacheInvalidated = true;
-                    console.warn('⚠ API 返回 400，queryId 可能已过期，清除缓存并重新发现...');
-                    await clearGraphQLCache(cacheKey);
-                    
-                    try {
-                        const rediscovery = await safeExecuteScript(
-                            tabId,
-                            buildDiscoverTweetQueryIdsScript(),
-                            { timeout: 60 }
-                        );
-                        if (rediscovery?.success) {
-                            if (rediscovery.tweetDetailQueryId) {
-                                graphqlParams.tweetDetailQueryId = rediscovery.tweetDetailQueryId;
-                            }
-                            if (rediscovery.tweetResultByRestIdQueryId) {
-                                graphqlParams.tweetResultByRestIdQueryId = rediscovery.tweetResultByRestIdQueryId;
-                            }
-                            graphqlParams.features = rediscovery.features || graphqlParams.features;
-                            await saveGraphQLCache(cacheKey, graphqlParams);
-                            console.log('✓ 重新发现完成，重试...');
-                            
-                            // 重试
-                            tweetResult = await safeExecuteScript(
-                                tabId,
-                                buildTweetDetailScript(
-                                    tweetId,
-                                    graphqlParams.tweetDetailQueryId || tweetDetailQueryId,
-                                    graphqlParams.features,
-                                    options.withThread,
-                                    collectReplies
-                                ),
-                                { timeout: 30 }
-                            );
-                        }
-                    } catch (e) {
-                        console.warn(`⚠ 重新发现失败: ${e.message}`);
-                    }
-                }
-                
-                if (!tweetResult || !tweetResult.success) {
-                    console.warn(`⚠ TweetDetail API 失败: ${tweetResult?.error || '未知错误'}`);
-                    graphqlFailed = true;
-                }
-                
-                // ---- 回复分页翻页 ----
-                if (!graphqlFailed && collectReplies && tweetResult?.replyCursor) {
-                    const allReplies = [...(tweetResult.replies || [])];
-                    const seenReplyIds = new Set(allReplies.map(r => r.tweetId));
-                    let replyCursor = tweetResult.replyCursor;
-                    const maxReplyPages = Math.ceil(options.withReplies / 20) + 1; // 每页约20条
-                    
-                    console.log(`    首页回复: ${allReplies.length} 条，开始翻页加载更多...`);
-                    
-                    for (let rPage = 1; rPage <= maxReplyPages; rPage++) {
-                        if (allReplies.length >= options.withReplies) {
-                            console.log(`    已达到目标回复数 (${options.withReplies})，停止翻页`);
-                            break;
-                        }
-                        if (!replyCursor) {
-                            console.log('    无更多回复游标，停止翻页');
-                            break;
-                        }
-                        
-                        console.log(`    加载回复第 ${rPage + 1} 页 (已有 ${allReplies.length} 条)...`);
-                        
-                        const cursorResult = await retryWithBackoff(
-                            async () => {
-                                return await safeExecuteScript(
-                                    tabId,
-                                    buildTweetDetailCursorScript(
-                                        tweetId,
-                                        replyCursor,
-                                        graphqlParams.tweetDetailQueryId || tweetDetailQueryId,
-                                        graphqlParams.features
-                                    ),
-                                    { timeout: 30 }
-                                );
-                            },
-                            {
-                                maxRetries: 2,
-                                baseDelay: 3000,
-                                maxDelay: 15000,
-                                onRetry: (attempt, delay, reason) => {
-                                    const errMsg = reason?.error || reason?.message || '未知';
-                                    console.log(`    重试 #${attempt}（等待 ${Math.round(delay / 1000)}s）: ${errMsg}`);
-                                }
-                            }
-                        );
-                        
-                        if (!cursorResult || !cursorResult.success) {
-                            const errMsg = cursorResult?.error || '未知错误';
-                            // 429 速率限制，停止翻页
-                            if (cursorResult?.statusCode === 429) {
-                                console.warn(`    ⚠ 遇到速率限制 (429)，停止回复翻页`);
-                            } else {
-                                console.warn(`    ⚠ 回复翻页失败: ${errMsg}`);
-                            }
-                            break;
-                        }
-                        
-                        const pageReplies = cursorResult.replies || [];
-                        let newCount = 0;
-                        for (const reply of pageReplies) {
-                            if (!seenReplyIds.has(reply.tweetId)) {
-                                seenReplyIds.add(reply.tweetId);
-                                allReplies.push(reply);
-                                newCount++;
-                            }
-                        }
-                        
-                        console.log(`    ✓ 第 ${rPage + 1} 页获取 ${pageReplies.length} 条回复, ${newCount} 条新增, 累计 ${allReplies.length} 条`);
-                        
-                        if (newCount === 0) {
-                            console.log('    无新增回复，停止翻页');
-                            break;
-                        }
-                        
-                        replyCursor = cursorResult.nextCursor;
-                        
-                        // 翻页间隔
-                        if (rPage < maxReplyPages && allReplies.length < options.withReplies) {
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                        }
-                    }
-                    
-                    // 截断到目标数量
-                    tweetResult.replies = allReplies.slice(0, options.withReplies);
-                    console.log(`    回复抓取完成: 共 ${tweetResult.replies.length} 条`);
-                }
-            } else {
-                graphqlFailed = true;
-            }
-            
-            // 策略 2: 回退到 TweetResultByRestId
-            if (graphqlFailed && restIdQueryId) {
-                console.log('  回退到 TweetResultByRestId API...');
-                
-                tweetResult = await retryWithBackoff(
-                    async () => {
-                        return await safeExecuteScript(
-                            tabId,
-                            buildTweetByRestIdScript(tweetId, restIdQueryId, graphqlParams.features),
-                            { timeout: 30 }
-                        );
-                    },
-                    {
-                        maxRetries: 3,
-                        baseDelay: 3000,
-                        maxDelay: 30000,
-                        onRetry: (attempt, delay, reason) => {
-                            const errMsg = reason?.error || reason?.message || '未知';
-                            console.log(`  重试 #${attempt}（等待 ${Math.round(delay / 1000)}s）: ${errMsg}`);
-                        }
-                    }
-                );
-                
-                if (!tweetResult || !tweetResult.success) {
-                    console.warn(`⚠ TweetResultByRestId API 也失败: ${tweetResult?.error || '未知错误'}`);
-                    graphqlFailed = true;
-                } else {
-                    graphqlFailed = false;
-                }
-            }
-            
-            // 策略 3: DOM 回退
-            if (graphqlFailed) {
-                console.log('  回退到 DOM 提取...');
-                
-                // 导航到推文详情页
-                const tweetUrl = `https://x.com/i/status/${tweetId}`;
-                try {
-                    await browser.openUrl(tweetUrl, tabId);
-                    await new Promise(resolve => setTimeout(resolve, 4000));
-                } catch (e) {
-                    console.warn(`⚠ 导航到推文页面失败: ${e.message}`);
-                }
-                
-                const domResult = await safeExecuteScript(
-                    tabId,
-                    buildPostDomScript(tweetId),
-                    { timeout: 60 }
-                );
-                
-                if (domResult?.success && domResult.focalTweet) {
-                    tweetResult = domResult;
-                    console.log('  ✓ DOM 回退成功');
-                } else {
-                    console.error(`  ✗ 所有方法均失败，跳过推文 ${tweetId}`);
-                    allResults.push({
-                        tweetId: tweetId,
-                        error: tweetResult?.error || domResult?.error || '抓取失败',
-                        success: false
-                    });
-                    continue;
-                }
-            }
-            
-            // 成功提取
-            if (tweetResult?.success && tweetResult.focalTweet) {
-                const postData = {
-                    tweetId: tweetId,
-                    success: true,
-                    ...tweetResult.focalTweet
-                };
-                
-                // 附加线程和回复
-                if (tweetResult.threadTweets && tweetResult.threadTweets.length > 0) {
-                    postData.threadTweets = tweetResult.threadTweets;
-                }
-                if (tweetResult.replies && tweetResult.replies.length > 0) {
-                    postData.replies = tweetResult.replies;
-                }
-                
-                allResults.push(postData);
-                
-                const contentPreview = (postData.content || '').substring(0, 80) + ((postData.content || '').length > 80 ? '...' : '');
-                const mediaCount = (postData.mediaUrls || []).length;
-                const threadCount = (postData.threadTweets || []).length;
-                const replyCount = (postData.replies || []).length;
-                
-                console.log(`  ✓ ${postData.author?.username || '未知'}: ${contentPreview}`);
-                console.log(`    点赞: ${postData.stats?.likes || 0} | 转发: ${postData.stats?.retweets || 0} | 查看: ${postData.stats?.views || 0}`);
-                if (mediaCount > 0) console.log(`    媒体: ${mediaCount} 个`);
-                if (threadCount > 0) console.log(`    线程上文: ${threadCount} 条`);
-                if (replyCount > 0) console.log(`    回复: ${replyCount} 条`);
-            }
-            
-            // 多条推文之间的间隔
-            if (i < tweetIds.length - 1) {
-                const waitMs = 2000;
-                console.log(`  等待 ${waitMs / 1000} 秒...`);
-                await new Promise(resolve => setTimeout(resolve, waitMs));
-            }
-        }
-
-        // ================================================================
-        // Phase 4: 保存结果
-        // ================================================================
-        
-        // 释放标签页
-        await releaseXTab(browser, tabId, !options.closeTab);
-
-        const successResults = allResults.filter(r => r.success);
-        const failedResults = allResults.filter(r => !r.success);
-
-        // 构建结果对象
-        const result = {
-            scrapeType: 'x_post',
-            scrapeOptions: {
-                withThread: options.withThread,
-                withReplies: options.withReplies
-            },
-            timestamp: new Date().toISOString(),
-            totalRequested: tweetIds.length,
-            totalSuccess: successResults.length,
-            totalFailed: failedResults.length,
-            results: allResults
-        };
+        const result = await getPost(browser, tweetIds, {
+            ...options,
+            logger: console,
+        });
 
         const output = options.pretty
             ? JSON.stringify(result, null, 2)
             : JSON.stringify(result);
-        
         await saveToFile(outputPath, output);
-        
-        // 打印摘要
+
+        const successResults = result.results.filter(r => r.success);
+        const failedResults = result.results.filter(r => !r.success);
+
         console.log('\n' + '='.repeat(60));
         console.log('抓取完成');
         console.log('='.repeat(60));
-        console.log(`成功: ${successResults.length} / ${tweetIds.length}`);
+        console.log(`成功: ${successResults.length} / ${result.totalRequested}`);
         if (failedResults.length > 0) {
             console.log(`失败: ${failedResults.length}`);
-            failedResults.forEach(r => {
-                console.log(`  - ${r.tweetId}: ${r.error}`);
-            });
+            failedResults.forEach(r => console.log(`  - ${r.tweetId}: ${r.error}`));
         }
-        
         if (successResults.length > 0) {
             const totalLikes = successResults.reduce((sum, t) => sum + (t.stats?.likes || 0), 0);
             const totalRetweets = successResults.reduce((sum, t) => sum + (t.stats?.retweets || 0), 0);
             const totalViews = successResults.reduce((sum, t) => sum + (t.stats?.views || 0), 0);
             const totalMedia = successResults.reduce((sum, t) => sum + (t.mediaUrls?.length || 0), 0);
-            
             console.log(`\n总点赞: ${totalLikes.toLocaleString()}`);
             console.log(`总转发: ${totalRetweets.toLocaleString()}`);
             console.log(`总查看: ${totalViews.toLocaleString()}`);
@@ -1526,24 +1143,9 @@ async function main() {
             console.error('\n堆栈跟踪:');
             console.error(error.stack);
         }
-        
-        // 释放标签页
-        if (tabId) {
-            try { await releaseXTab(browser, tabId, !options.closeTab); } catch (e) {}
-        } else {
-            browser.disconnect();
-        }
-        
+        browser.disconnect();
         process.exit(1);
     }
-}
-
-// 运行主函数
-if (require.main === module) {
-    main().catch(error => {
-        console.error('未处理的错误:', error);
-        process.exit(1);
-    });
 }
 
 module.exports = {
@@ -1557,3 +1159,10 @@ module.exports = {
     buildTweetByRestIdScript,
     buildPostDomScript
 };
+
+if (require.main === module) {
+    main().catch(error => {
+        console.error('未处理的错误:', error);
+        process.exit(1);
+    });
+}

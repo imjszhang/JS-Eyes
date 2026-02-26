@@ -240,6 +240,35 @@ You can also ask the AI agent to list your browser tabs — it should invoke `js
 | Tools not appearing in OpenClaw | Plugin path wrong or not enabled | Ensure `plugins.load.paths` points to the `openclaw-plugin` subdirectory, not the skill root |
 | Plugin path not found (Windows) | Path format | Use forward slashes in JSON, e.g. `C:/Users/you/skills/js-eyes/openclaw-plugin` |
 
+## Extension Skills
+
+js-eyes ships with built-in extension skills that add higher-level capabilities on top of the base browser automation:
+
+| Skill | Location | Description |
+|-------|----------|-------------|
+| **x-search** | `skills/x-search/` | X.com (Twitter) content scraping — search tweets, user timelines, post details, home feed |
+
+Extension skills depend on js-eyes for browser automation and can be registered as separate OpenClaw plugins. See each skill's `SKILL.md` for setup instructions.
+
+To register the x-search plugin, add its `openclaw-plugin` path to your `openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": [
+        "/path/to/skills/js-eyes/openclaw-plugin",
+        "/path/to/skills/js-eyes/skills/x-search/openclaw-plugin"
+      ]
+    },
+    "entries": {
+      "js-eyes": { "enabled": true },
+      "x-search": { "enabled": true }
+    }
+  }
+}
+```
+
 ## Links
 
 - Source: <https://github.com/imjszhang/js-eyes>

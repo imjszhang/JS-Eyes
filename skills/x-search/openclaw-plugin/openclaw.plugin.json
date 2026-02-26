@@ -1,0 +1,44 @@
+{
+  "id": "x-search",
+  "name": "X Search",
+  "description": "X.com (Twitter) 内容抓取工具 — 搜索推文、获取用户时间线、推文详情和首页推荐（依赖 js-eyes 技能）",
+  "version": "1.0.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "jsEyesServerUrl": {
+        "type": "string",
+        "default": "ws://localhost:18080",
+        "description": "JS-Eyes WebSocket 服务器地址"
+      },
+      "requestTimeout": {
+        "type": "number",
+        "default": 60,
+        "description": "单次浏览器脚本执行超时（秒）"
+      },
+      "defaultMaxPages": {
+        "type": "number",
+        "default": 3,
+        "description": "默认最大翻页数"
+      }
+    }
+  },
+  "uiHints": {
+    "jsEyesServerUrl": {
+      "label": "JS-Eyes 服务器",
+      "placeholder": "ws://localhost:18080",
+      "help": "JS-Eyes WebSocket 服务器地址，需与 js-eyes 插件配置一致"
+    },
+    "requestTimeout": {
+      "label": "请求超时（秒）",
+      "help": "GraphQL 发现和脚本执行的超时时间",
+      "advanced": true
+    },
+    "defaultMaxPages": {
+      "label": "默认翻页数",
+      "help": "AI 工具未指定 maxPages 时使用的默认值",
+      "advanced": true
+    }
+  }
+}
