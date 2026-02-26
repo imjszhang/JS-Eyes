@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JS Eyes - Browser Extension for AI Agent Frameworks</title>
-    <meta name="description" content="JS Eyes provides browser automation capabilities for AI agent frameworks via WebSocket. Official OpenClaw plugin. Supports Chrome, Edge, and Firefox.">
-    <meta name="keywords" content="browser extension, AI agent, WebSocket, browser automation, Chrome, Firefox, Edge, OpenClaw, personal AI assistant, OpenClaw plugin, lobster AI">
-    <meta property="og:title" content="JS Eyes - AI Agent Browser Automation | OpenClaw Plugin">
-    <meta property="og:description" content="Let AI assistants operate your browser: open pages, fill forms, extract data. Official OpenClaw plugin with 7 AI tools and zero-config integration.">
+    <meta name="description" content="JS Eyes provides browser automation capabilities for AI agent frameworks via WebSocket. Native OpenClaw support. Supports Chrome, Edge, and Firefox.">
+    <meta name="keywords" content="browser extension, AI agent, WebSocket, browser automation, Chrome, Firefox, Edge, OpenClaw, personal AI assistant, lobster AI">
+    <meta property="og:title" content="JS Eyes - AI Agent Browser Automation | Native OpenClaw Support">
+    <meta property="og:description" content="Let AI assistants operate your browser: open pages, fill forms, extract data. Native OpenClaw support with 7 AI tools and zero-config integration.">
     <meta property="og:type" content="website">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='16' fill='%23FCD228'/><text x='64' y='64' font-family='sans-serif' font-size='72' font-weight='700' fill='%2337342F' text-anchor='middle' dominant-baseline='central'>JS</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -211,7 +211,7 @@
                 </div>
                 <a href="https://openclaw.ai/" target="_blank" class="opacity-0-init animate-slide-up stagger-1 bg-[#E74C3C] text-white inline-flex items-center gap-2 px-4 py-1 border-2 border-black font-mono font-bold text-sm mb-6 shadow-brutal transform rotate-1 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] transition-all no-underline">
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
-                    <span data-i18n="hero.openclawBadge">OFFICIAL OPENCLAW PLUGIN</span>
+                    <span data-i18n="hero.openclawBadge">NATIVE OPENCLAW SUPPORT</span>
                 </a>
             </div>
 
@@ -223,7 +223,7 @@
             <div class="opacity-0-init animate-slide-up stagger-3 flex flex-col sm:flex-row gap-8 items-start">
                 <p class="text-xl md:text-2xl font-bold max-w-2xl leading-relaxed border-l-4 border-black pl-6 bg-white/50 backdrop-blur-sm p-4 text-left" data-i18n-html="hero.desc">
                     Browser extension that gives AI agents <span class="bg-black text-brand-yellow px-1">real eyes</span> into the browser.
-                    WebSocket-powered automation for any AI framework. First-class <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> plugin support.
+                    WebSocket-powered automation for any AI framework. Native <span class="bg-[#E74C3C] text-white px-1">OpenClaw</span> support.
                 </p>
 
                 <div class="brutal-card p-0 bg-black text-brand-yellow font-mono text-xs w-full sm:w-96 shadow-brutal text-left overflow-hidden">
@@ -242,6 +242,7 @@
                                 <span id="deploy-copy-text" data-i18n="hero.deployCopy">Copy</span>
                             </button>
                         </div>
+                        <div class="mt-2 text-[10px] text-gray-400" data-i18n="hero.deployTip">You can also copy the command and send it to your OpenClaw or other Agent.</div>
                         <div class="mt-3 pt-3 border-t border-gray-800 space-y-1 text-[11px]">
                             <p class="text-green-400" data-i18n="hero.deployResult1">&#10003; js-eyes installed</p>
                             <p class="text-green-400" data-i18n="hero.deployResult2">&#10003; Plugin registered</p>
@@ -254,17 +255,17 @@
             </div>
 
             <div class="opacity-0-init animate-slide-up stagger-4 flex flex-col sm:flex-row gap-6 mt-10">
-                <a href="https://github.com/imjszhang/js-eyes/releases/latest" target="_blank" class="brutal-btn-primary px-8 py-4 text-lg gap-3">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                    <span data-i18n="hero.btnDownload">Download Now</span>
+                <a href="./js-eyes-chrome-latest.zip" download class="brutal-btn-primary px-8 py-4 text-lg gap-3">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+                    </svg>
+                    <span data-i18n="hero.btnChrome">Chrome / Edge Extension</span>
                 </a>
-                <a href="https://github.com/imjszhang/js-eyes" target="_blank" class="brutal-btn-secondary px-8 py-4 text-lg gap-3">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span data-i18n="hero.btnDocs">Documentation</span>
-                </a>
-                <a href="https://openclaw.ai/docs" target="_blank" class="brutal-btn-openclaw px-8 py-4 text-lg gap-3">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L5 2M15 7L19 2"/><path d="M7 10c-3-2-5 0-4 2s3 1 5 0"/><path d="M17 10c3-2 5 0 4 2s-3 1-5 0"/><ellipse cx="12" cy="11" rx="5" ry="5"/><path d="M10 16v2l2 3 2-3v-2"/></svg>
-                    <span data-i18n="hero.btnOpenclaw">OpenClaw Docs</span>
+                <a href="./js-eyes-firefox-latest.xpi" download class="brutal-btn-secondary px-8 py-4 text-lg gap-3">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12c0-2.2 1.8-4 4-4"/><path d="M12 8v8"/><circle cx="12" cy="12" r="2"/>
+                    </svg>
+                    <span data-i18n="hero.btnFirefox">Firefox Extension</span>
                 </a>
             </div>
         </section>
