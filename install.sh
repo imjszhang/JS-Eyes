@@ -113,6 +113,10 @@ if [ -n "$SUB_SKILL" ]; then
     err "unzip or python3 is required."; exit 1
   fi
 
+  # Fix permissions: OpenClaw rejects world-writable plugin paths
+  find "$TARGET" -type f -exec chmod 644 {} + 2>/dev/null || true
+  find "$TARGET" -type d -exec chmod 755 {} + 2>/dev/null || true
+
   if [ -f "${TARGET}/package.json" ]; then
     info "Installing dependencies..."
     (cd "$TARGET" && npm install --production 2>/dev/null || npm install)
@@ -226,6 +230,10 @@ else
     [ -d "${EXTRACTED}/${d}" ] && cp -r "${EXTRACTED}/${d}" "${TARGET}/"
   done
 fi
+
+# Fix permissions: OpenClaw rejects world-writable plugin paths
+find "$TARGET" -type f -exec chmod 644 {} + 2>/dev/null || true
+find "$TARGET" -type d -exec chmod 755 {} + 2>/dev/null || true
 
 # ── Install dependencies ──────────────────────────────────────────────
 info "Installing dependencies..."
