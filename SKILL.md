@@ -131,7 +131,7 @@ By default, the skill is installed to `./skills/js-eyes`. To change the location
 
 ```bash
 # Linux / macOS
-JS_EYES_DIR=~/.openclaw/skills curl -fsSL https://js-eyes.com/install.sh | bash
+curl -fsSL https://js-eyes.com/install.sh | JS_EYES_DIR=~/.openclaw/skills bash
 
 # Windows PowerShell
 $env:JS_EYES_DIR="$HOME\.openclaw\skills"; irm https://js-eyes.com/install.ps1 | iex

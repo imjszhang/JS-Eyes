@@ -47,7 +47,7 @@ command -v node >/dev/null 2>&1 || { err "Node.js is required. Install: https://
 command -v npm  >/dev/null 2>&1 || { err "npm is required."; exit 1; }
 
 # ══════════════════════════════════════════════════════════════════════
-# Sub-skill install: JS_EYES_SKILL=<id> or bash -s -- <skill-id>
+# Sub-skill install: curl ... | JS_EYES_SKILL=<id> bash  or  bash -s -- <skill-id>
 # ══════════════════════════════════════════════════════════════════════
 if [ -n "$SUB_SKILL" ]; then
   JS_EYES_ROOT="${INSTALL_DIR}/${SKILL_NAME}"

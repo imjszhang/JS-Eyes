@@ -231,7 +231,7 @@ https://js-eyes.com/skills.json
 curl -fsSL https://js-eyes.com/install.sh | bash -s -- js-search-x
 
 # Linux / macOS（方式二：环境变量，与 PowerShell 一致）
-JS_EYES_SKILL=js-search-x curl -fsSL https://js-eyes.com/install.sh | bash
+curl -fsSL https://js-eyes.com/install.sh | JS_EYES_SKILL=js-search-x bash
 
 # Windows PowerShell
 $env:JS_EYES_SKILL="js-search-x"; irm https://js-eyes.com/install.ps1 | iex
