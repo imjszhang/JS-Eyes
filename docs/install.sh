@@ -5,7 +5,7 @@ REPO="imjszhang/js-eyes"
 SKILL_NAME="js-eyes"
 SITE_URL="https://js-eyes.com"
 INSTALL_DIR="${JS_EYES_DIR:-./skills}"
-SUB_SKILL="${JS_EYES_SKILL:-$1}"
+SUB_SKILL="${JS_EYES_SKILL:-${1:-}}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}[info]${NC}  %s\n" "$1"; }
@@ -66,7 +66,7 @@ if [ -n "$SUB_SKILL" ]; then
     exit 1
   fi
 
-  DOWNLOAD_URLS=$(node -e "
+  _download_urls_raw=$(node -e "
     let r; try { r = JSON.parse(process.argv[1]); } catch (_) { process.exit(1); }
     const s = r.skills && r.skills.find(x => x.id === process.argv[2]);
     if (!s) process.exit(1);
@@ -75,12 +75,17 @@ if [ -n "$SUB_SKILL" ]; then
     console.log(urls.join('\n'));
   " "$REGISTRY_JSON" "$SUB_SKILL" 2>/dev/null) || true
 
-  if [ -z "$DOWNLOAD_URLS" ]; then
+  if [ -z "$_download_urls_raw" ]; then
     err "Skill '${SUB_SKILL}' not found in registry."
     info "Available skills:"
     printf '%s' "$REGISTRY_JSON" | grep '"id"' | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/  - \1/'
     exit 1
   fi
+
+  download_urls=()
+  while IFS= read -r _line; do
+    [ -n "$_line" ] && download_urls+=("$_line")
+  done <<< "$_download_urls_raw"
 
   TARGET="${JS_EYES_ROOT}/skills/${SUB_SKILL}"
   if [ -d "$TARGET" ]; then
@@ -90,12 +95,12 @@ if [ -n "$SUB_SKILL" ]; then
   fi
   mkdir -p "$TARGET"
 
-  TMPDIR=$(mktemp -d)
-  trap 'rm -rf "$TMPDIR"' EXIT
+  _tmpdir=$(mktemp -d)
+  trap 'rm -rf "$_tmpdir"' EXIT
 
-  SKILL_ZIP="${TMPDIR}/skill.zip"
+  SKILL_ZIP="${_tmpdir}/skill.zip"
   info "Downloading ${SUB_SKILL}..."
-  if ! try_download "$SKILL_ZIP" $DOWNLOAD_URLS; then
+  if ! try_download "$SKILL_ZIP" "${download_urls[@]}"; then
     err "Failed to download skill bundle."; exit 1
   fi
 
@@ -159,26 +164,26 @@ fi
 mkdir -p "$TARGET"
 
 # ── Download with multi-source fallback ───────────────────────────────
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+_tmpdir=$(mktemp -d)
+trap 'rm -rf "$_tmpdir"' EXIT
 
-SKILL_ZIP="${TMPDIR}/skill.zip"
-ARCHIVE_ZIP="${TMPDIR}/archive.zip"
+SKILL_ZIP="${_tmpdir}/skill.zip"
+ARCHIVE_ZIP="${_tmpdir}/archive.zip"
 USE_SKILL_ZIP=0
 
-URLS_SKILL_ZIP="${SITE_URL}/js-eyes-skill.zip"
-URLS_ARCHIVE=""
+urls_skill_zip=("${SITE_URL}/js-eyes-skill.zip")
+urls_archive=()
 if [ -n "$TAG" ]; then
-  URLS_ARCHIVE="https://github.com/${REPO}/archive/refs/tags/${TAG}.zip"
+  urls_archive=("https://github.com/${REPO}/archive/refs/tags/${TAG}.zip")
 else
-  URLS_ARCHIVE="https://github.com/${REPO}/archive/refs/heads/main.zip"
+  urls_archive=("https://github.com/${REPO}/archive/refs/heads/main.zip")
 fi
 
 info "Downloading skill bundle..."
 
-if try_download "$SKILL_ZIP" $URLS_SKILL_ZIP; then
+if try_download "$SKILL_ZIP" "${urls_skill_zip[@]}"; then
   USE_SKILL_ZIP=1
-elif [ -n "$URLS_ARCHIVE" ] && try_download "$ARCHIVE_ZIP" $URLS_ARCHIVE; then
+elif [ "${#urls_archive[@]}" -gt 0 ] && try_download "$ARCHIVE_ZIP" "${urls_archive[@]}"; then
   USE_SKILL_ZIP=0
 else
   err "All download sources failed. Check your network and try again."
@@ -202,7 +207,7 @@ extract_zip() {
 if [ "$USE_SKILL_ZIP" = "1" ]; then
   extract_zip "$SKILL_ZIP" "$TARGET"
 else
-  EXTRACT_DIR="${TMPDIR}/extract"
+  EXTRACT_DIR="${_tmpdir}/extract"
   mkdir -p "$EXTRACT_DIR"
   extract_zip "$ARCHIVE_ZIP" "$EXTRACT_DIR"
   EXTRACTED=""
