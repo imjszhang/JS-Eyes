@@ -761,6 +761,7 @@ async function main() {
         await saveToFile(outputPath, output);
         await cleanupTempFiles(outputDir);
         printSummary(result.results, '抓取完成');
+        browser.disconnect();
 
     } catch (error) {
         console.error('\n✗ 抓取失败:');
@@ -1060,6 +1061,7 @@ async function resumeProfile(options) {
     await saveToFile(outputPath, output);
     await cleanupTempFiles(resumeDir);
     printSummary(filteredTweets, '抓取完成');
+    browser.disconnect();
 }
 
 module.exports = {

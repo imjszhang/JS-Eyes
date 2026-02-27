@@ -758,6 +758,7 @@ async function main() {
         await saveToFile(outputPath, output);
         await cleanupTempFiles(outputDir);
         printSummary(result.results, '搜索完成');
+        browser.disconnect();
 
     } catch (error) {
         console.error('\n✗ 搜索失败:');
@@ -1060,6 +1061,7 @@ async function resumeSearch(options) {
     await saveToFile(outputPath, output);
     await cleanupTempFiles(resumeDir);
     printSummary(filteredTweets, '搜索完成');
+    browser.disconnect();
 }
 
 module.exports = {

@@ -1135,6 +1135,7 @@ async function main() {
             if (totalMedia > 0) console.log(`总媒体: ${totalMedia} 个`);
         }
         console.log('='.repeat(60));
+        browser.disconnect();
 
     } catch (error) {
         console.error('\n✗ 抓取失败:');
