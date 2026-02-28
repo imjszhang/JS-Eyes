@@ -46,6 +46,7 @@
 
 const { BrowserAutomation } = require('../lib/js-eyes-client');
 const path = require('path');
+const fs = require('fs').promises;
 const { getPost } = require('../lib/api');
 const {
     DEFAULT_GRAPHQL_FEATURES,
@@ -85,7 +86,8 @@ function parseArgs() {
         post: null,            // 单条新帖正文（--post "内容"）
         thread: [],            // 串推多段（--thread "段1" "段2" ...）
         threadDelay: 3500,     // 串推每条之间延迟毫秒（建议 3～5 秒，避免限流）
-        threadMax: 25          // 串推最大条数
+        threadMax: 25,         // 串推最大条数
+        image: null            // 发帖时附带的图片路径（--image path，仅单条或串推第1条）
     };
 
     let collectingThread = false;
@@ -147,6 +149,10 @@ function parseArgs() {
                     options.threadMax = parseInt(nextArg, 10) || 25;
                     i++;
                     break;
+                case 'image':
+                    options.image = typeof nextArg === 'string' ? nextArg : '';
+                    if (options.image) i++;
+                    break;
                 default:
                     console.warn(`未知选项: ${arg}`);
             }
@@ -201,6 +207,7 @@ function printUsage() {
     console.log('  --thread "段1" "段2" ...  发串推（与 URL、--post、--reply 互斥）');
     console.log('  --thread-delay <ms>       串推每条之间延迟毫秒（默认 3500，建议 3～5 秒防限流）');
     console.log('  --thread-max <n>          串推最大条数（默认 25）');
+    console.log('  --image <path>            发帖时附带图片（仅单条或串推第1条）');
     console.log('\n示例:');
     console.log('  node scripts/x-post.js https://x.com/elonmusk/status/1234567890');
     console.log('  node scripts/x-post.js 1234567890 9876543210 --pretty');
@@ -212,6 +219,7 @@ function printUsage() {
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run');
     console.log('  node scripts/x-post.js --post "新帖内容"');
     console.log('  node scripts/x-post.js --thread "段1" "段2" "段3" --thread-delay 2000');
+    console.log('  node scripts/x-post.js --post "带图发帖" --image ./path/to/image.png');
 }
 
 // ============================================================================
@@ -1636,6 +1644,121 @@ async function postNewTweetViaMutation(browser, tabId, tweetText, safeExecuteScr
 }
 
 // ============================================================================
+// 发新帖：先添加图片（可选）
+// ============================================================================
+
+const IMAGE_B64_CHUNK_SIZE = 32 * 1024; // 分块注入避免单次脚本过大导致截断/黑图
+
+function escapeForJsDoubleQuote(s) {
+    return (s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/** 分块设置 window.__imgB64（避免整图 base64 内联导致消息截断或黑图） */
+function buildSetComposerImageChunkScript(chunk, isFirst) {
+    const safe = escapeForJsDoubleQuote(chunk);
+    if (isFirst) {
+        return `(function(){ window.__imgB64 = "${safe}"; })();`;
+    }
+    return `(function(){ window.__imgB64 = (window.__imgB64 || "") + "${safe}"; })();`;
+}
+
+/**
+ * 用已注入的 window.__imgB64 在 composer 中设置文件输入（脚本内不含 base64，避免体积过大）
+ */
+function buildSetComposerImageApplyScript(mimeType, fileName) {
+    const safeMime = (mimeType || 'image/png').replace(/"/g, '\\"');
+    const safeName = (fileName || 'image.png').replace(/"/g, '\\"');
+    return `
+    (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        try {
+            var composerRoot = document.querySelector('[role="dialog"]') || document.querySelector('[data-testid="tweetComposer"]') || document.body;
+            var tryExpand = function() {
+                var btn = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+                if (btn && !document.querySelector('[data-testid="tweetTextarea_0"]')) {
+                    btn.click();
+                    return true;
+                }
+                return false;
+            };
+            tryExpand();
+            await delay(1500);
+            var textarea = document.querySelector('[data-testid="tweetTextarea_0"]');
+            var composerScope = (textarea && textarea.closest('[role="dialog"]')) ? textarea.closest('[role="dialog"]') : (textarea && textarea.closest('[data-testid="tweetComposer"]')) ? textarea.closest('[data-testid="tweetComposer"]') : composerRoot;
+            var fileInput = composerScope.querySelector('input[type="file"]');
+            if (!fileInput) {
+                var attachBtn = composerScope.querySelector('[data-testid="attachMedia"]') || composerScope.querySelector('[data-testid="fileInput"]');
+                if (attachBtn && attachBtn.tagName === 'INPUT') {
+                    fileInput = attachBtn;
+                } else if (attachBtn) {
+                    attachBtn.click();
+                    await delay(1200);
+                    fileInput = composerScope.querySelector('input[type="file"]');
+                }
+                if (!fileInput && composerScope !== document.body) {
+                    var allInScope = composerScope.querySelectorAll('input[type="file"]');
+                    fileInput = allInScope.length > 0 ? allInScope[0] : null;
+                }
+            }
+            if (!fileInput) {
+                return { success: false, error: '未找到发推框中的文件输入' };
+            }
+            var b64 = (window.__imgB64 || "").replace(/\s/g, "");
+            if (!b64) {
+                return { success: false, error: '未找到图片数据' };
+            }
+            var binary = atob(b64);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+            var blob = new Blob([bytes], { type: "${safeMime}" });
+            var file = new File([blob], "${safeName}", { type: "${safeMime}" });
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+            var dropZone = composerScope.querySelector('[data-testid="attachMedia"]') ? composerScope.querySelector('[data-testid="attachMedia"]').closest('div') || composerScope : composerScope;
+            var file2 = new File([blob], "${safeName}", { type: "${safeMime}" });
+            var dt2 = new DataTransfer();
+            dt2.items.add(file2);
+            dropZone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt2 }));
+            dropZone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt2 }));
+            await delay(2000);
+            try { delete window.__imgB64; } catch (e) {}
+            return { success: true, b64Len: b64.length, blobSize: blob.size };
+        } catch (e) {
+            try { delete window.__imgB64; } catch (err) {}
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+async function setComposerImage(browser, tabId, imagePath, safeExecuteScript) {
+    const ext = path.extname(imagePath).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    const name = path.basename(imagePath) || 'image' + ext;
+    let base64;
+    try {
+        const buf = await fs.readFile(imagePath);
+        base64 = buf.toString('base64');
+    } catch (e) {
+        return { success: false, error: '读取图片失败: ' + e.message };
+    }
+    const chunks = [];
+    for (let i = 0; i < base64.length; i += IMAGE_B64_CHUNK_SIZE) {
+        chunks.push(base64.slice(i, i + IMAGE_B64_CHUNK_SIZE));
+    }
+    for (let i = 0; i < chunks.length; i++) {
+        const chunkScript = buildSetComposerImageChunkScript(chunks[i], i === 0);
+        await safeExecuteScript(tabId, chunkScript, { timeout: 10000 });
+    }
+    const applyScript = buildSetComposerImageApplyScript(mime, name);
+    const result = await safeExecuteScript(tabId, applyScript, { timeout: 25000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+// ============================================================================
 // 发新帖：DOM 回退（首页 / intent）
 // ============================================================================
 
@@ -1885,16 +2008,18 @@ async function main() {
     console.log('X.com 帖子内容抓取工具');
     console.log('='.repeat(60));
     if (isPostMode) {
-        if (hasPost) {
-            console.log('模式: 发新帖（单条）');
-            console.log(`内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.post).slice(0, 60)}${String(options.post).length > 60 ? '...' : ''}"`);
-        } else {
-            console.log('模式: 串推（thread）');
-            console.log(`条数: ${options.thread.length}`);
-            options.thread.forEach((seg, i) => {
-                console.log(`  ${i + 1}. ${String(seg).slice(0, 50)}${String(seg).length > 50 ? '...' : ''}`);
-            });
-            console.log(`段间延迟: ${options.threadDelay} ms`);
+    if (hasPost) {
+        console.log('模式: 发新帖（单条）');
+        console.log(`内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.post).slice(0, 60)}${String(options.post).length > 60 ? '...' : ''}"`);
+        if (options.image) console.log('附带图片: ' + options.image);
+    } else {
+        console.log('模式: 串推（thread）');
+        console.log(`条数: ${options.thread.length}`);
+        options.thread.forEach((seg, i) => {
+            console.log(`  ${i + 1}. ${String(seg).slice(0, 50)}${String(seg).length > 50 ? '...' : ''}`);
+        });
+        console.log(`段间延迟: ${options.threadDelay} ms`);
+        if (options.image) console.log('第1条附带图片: ' + options.image);
         }
     } else {
         console.log(`推文数量: ${tweetIds.length}`);
@@ -1938,6 +2063,20 @@ async function main() {
                     }
                     console.log('(未实际发送)');
                 } else if (hasPost) {
+                    if (options.image) {
+                        const imagePath = path.isAbsolute(options.image) ? options.image : path.join(process.cwd(), options.image);
+                        const imgResult = await setComposerImage(browser, tabId, imagePath, safeExecuteScript);
+                        if (!imgResult.success) {
+                            console.error('添加图片失败:', imgResult.error || '未知');
+                        } else {
+                            if (imgResult.b64Len != null && imgResult.blobSize != null) {
+                                console.log('已添加图片 (base64 长度:', imgResult.b64Len, ', blob 大小:', imgResult.blobSize, ')，正在填写正文并发送...');
+                            } else {
+                                console.log('已添加图片，正在填写正文并发送...');
+                            }
+                        }
+                        await new Promise(r => setTimeout(r, 1500));
+                    }
                     const result = await postNewTweetViaDom(browser, tabId, options.post, safeExecuteScript);
                     if (result.success) {
                         console.log('新帖已发送' + (result.tweetId ? '，ID: ' + result.tweetId : ''));
@@ -1956,6 +2095,20 @@ async function main() {
                         const text = options.thread[i];
                         let result;
                         if (i === 0) {
+                            if (options.image) {
+                                const imagePath = path.isAbsolute(options.image) ? options.image : path.join(process.cwd(), options.image);
+                                const imgResult = await setComposerImage(browser, tabId, imagePath, safeExecuteScript);
+                                if (!imgResult.success) {
+                                    console.error('添加图片失败:', imgResult.error || '未知');
+                                } else {
+                                    if (imgResult.b64Len != null && imgResult.blobSize != null) {
+                                        console.log('  已添加图片 (base64 长度:', imgResult.b64Len, ', blob 大小:', imgResult.blobSize, ')，正在填写第1条并发送...');
+                                    } else {
+                                        console.log('  已添加图片，正在填写第1条并发送...');
+                                    }
+                                }
+                                await new Promise(r => setTimeout(r, 1500));
+                            }
                             result = await postNewTweetViaDom(browser, tabId, text, safeExecuteScript);
                             if (result.success) {
                                 console.log(`  等待 ${delayMs / 1000} 秒间隔...`);
