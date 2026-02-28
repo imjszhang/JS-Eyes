@@ -17,6 +17,10 @@
  *   --reply "内容"             对指定推文发表回复（仅支持单条推文）
  *   --reply-style reply|thread  reply=Replying to @xxx 式（默认）；thread=推文下点击回复
  *   --dry-run                  与 --reply 同用时仅打印回复内容，不实际发送
+ *   --post "内容"              发一条新帖（无需 URL/ID）；与 --reply、--thread、URL 互斥
+ *   --thread "段1" "段2" ...   发串推（第2条起依次回复上一条）；与 --post、--reply、URL 互斥
+ *   --thread-delay <ms>        串推每条之间的延迟毫秒（默认 2000）
+ *   --thread-max <n>           串推最大条数，超过报错（默认 25）
  * 
  * 文件保存位置:
  *   work_dir/scrape/x_com_post/{tweetId}_{timestamp}/data.json
@@ -31,6 +35,8 @@
  *   node scripts/x-post.js 1234567890 --output my_post.json --close-tab
  *   node scripts/x-post.js https://x.com/user/status/123 --reply "回复内容"
  *   node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run
+ *   node scripts/x-post.js --post "新帖内容"
+ *   node scripts/x-post.js --thread "段1" "段2" "段3" --thread-delay 2000
  * 
  * 注意:
  *   - 需要 JS-Eyes Server 运行中，且浏览器已安装 JS-Eyes 扩展并登录 X.com
@@ -75,13 +81,20 @@ function parseArgs() {
         closeTab: false,
         reply: null,           // 回复内容，非空时进入回复模式
         dryRun: false,         // 仅打印不发送
-        replyStyle: 'reply'    // 'reply' = Replying to @xxx 式回复；'thread' = 点击推文下回复按钮（可能呈 thread）
+        replyStyle: 'reply',   // 'reply' = Replying to @xxx 式回复；'thread' = 点击推文下回复按钮（可能呈 thread）
+        post: null,            // 单条新帖正文（--post "内容"）
+        thread: [],            // 串推多段（--thread "段1" "段2" ...）
+        threadDelay: 3500,     // 串推每条之间延迟毫秒（建议 3～5 秒，避免限流）
+        threadMax: 25          // 串推最大条数
     };
+
+    let collectingThread = false;
 
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
         if (arg.startsWith('--')) {
+            collectingThread = false;
             const key = arg.replace('--', '').replace(/-/g, '');
             const nextArg = args[i + 1];
 
@@ -119,12 +132,30 @@ function parseArgs() {
                     if (style === 'thread' || style === 'reply') options.replyStyle = style;
                     if (nextArg) i++;
                     break;
+                case 'post':
+                    options.post = typeof nextArg === 'string' ? nextArg : '';
+                    if (options.post) i++;
+                    break;
+                case 'thread':
+                    collectingThread = true;
+                    break;
+                case 'threaddelay':
+                    options.threadDelay = parseInt(nextArg, 10) || 3500;
+                    i++;
+                    break;
+                case 'threadmax':
+                    options.threadMax = parseInt(nextArg, 10) || 25;
+                    i++;
+                    break;
                 default:
                     console.warn(`未知选项: ${arg}`);
             }
         } else {
-            // 位置参数：推文 URL 或 ID
-            options.tweetInputs.push(arg);
+            if (collectingThread) {
+                options.thread.push(arg);
+            } else {
+                options.tweetInputs.push(arg);
+            }
         }
     }
 
@@ -154,6 +185,8 @@ function extractTweetId(input) {
 function printUsage() {
     console.log('\n使用方法:');
     console.log('  node scripts/x-post.js <url_or_id> [url_or_id...] [options]');
+    console.log('  node scripts/x-post.js --post "内容" [options]');
+    console.log('  node scripts/x-post.js --thread "段1" "段2" "段3" [options]');
     console.log('\n选项:');
     console.log('  --with-thread              抓取完整对话线程（默认只抓取指定推文）');
     console.log('  --with-replies <number>    包含回复数，支持分页翻页（默认0，不抓取回复）');
@@ -163,7 +196,11 @@ function printUsage() {
     console.log('  --close-tab                抓完后关闭 tab（默认保留）');
     console.log('  --reply "内容"             对指定推文发表回复（回复模式，仅支持单条推文）');
     console.log('  --reply-style <reply|thread>  reply=Replying to @xxx 式（默认）；thread=推文下点击回复（可能呈 thread）');
-    console.log('  --dry-run                  与 --reply 同用时仅打印回复内容，不实际发送');
+    console.log('  --dry-run                  与 --reply/--post/--thread 同用时仅打印内容，不实际发送');
+    console.log('  --post "内容"             发一条新帖（与 URL、--reply、--thread 互斥）');
+    console.log('  --thread "段1" "段2" ...  发串推（与 URL、--post、--reply 互斥）');
+    console.log('  --thread-delay <ms>       串推每条之间延迟毫秒（默认 3500，建议 3～5 秒防限流）');
+    console.log('  --thread-max <n>          串推最大条数（默认 25）');
     console.log('\n示例:');
     console.log('  node scripts/x-post.js https://x.com/elonmusk/status/1234567890');
     console.log('  node scripts/x-post.js 1234567890 9876543210 --pretty');
@@ -173,6 +210,8 @@ function printUsage() {
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "回复" --reply-style reply');
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "续推" --reply-style thread');
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run');
+    console.log('  node scripts/x-post.js --post "新帖内容"');
+    console.log('  node scripts/x-post.js --thread "段1" "段2" "段3" --thread-delay 2000');
 }
 
 // ============================================================================
@@ -1172,26 +1211,50 @@ function buildReplyViaDomScript(tweetId, replyText) {
                 textarea.value = replyText;
                 textarea.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            await delay(700);
-            let postBtn = document.querySelector('[data-testid="tweetButtonInline"]');
-            if (!postBtn) postBtn = document.querySelector('[data-testid="tweetButton"]');
-            if (!postBtn) {
-                postBtn = Array.from(document.querySelectorAll('button[role="button"]')).find(function(b) {
-                    var t = (b.textContent || '').trim();
-                    return (t === 'Post' || t === 'Reply' || t === '发推' || t === '回复') && !b.disabled && !b.hasAttribute('disabled');
-                });
+            await delay(1200);
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: replyText }));
+            await delay(800);
+            var root = composerRoot && composerRoot !== document.body ? composerRoot : document;
+            let postBtn = null;
+            for (var waitRound = 0; waitRound < 25; waitRound++) {
+                postBtn = root.querySelector('[data-testid="tweetButtonInline"]');
+                if (!postBtn) postBtn = root.querySelector('[data-testid="tweetButton"]');
+                if (!postBtn) {
+                    postBtn = Array.from(root.querySelectorAll('button[role="button"]')).find(function(b) {
+                        if (!isVisible(b)) return false;
+                        var t = (b.textContent || '').trim();
+                        return (t === 'Post' || t === 'Reply' || t === '发推' || t === '回复');
+                    });
+                }
+                if (postBtn && !postBtn.hasAttribute('disabled') && !postBtn.disabled && postBtn.getAttribute('aria-disabled') !== 'true') {
+                    break;
+                }
+                postBtn = null;
+                await delay(400);
             }
             if (!postBtn) {
                 return { success: false, error: '未找到发送按钮' };
             }
-            if (postBtn.hasAttribute('disabled') || postBtn.disabled) {
-                return { success: false, error: '发送按钮不可用（可能未满足字数或权限）' };
+            if (postBtn.hasAttribute('disabled') || postBtn.disabled || postBtn.getAttribute('aria-disabled') === 'true') {
+                return { success: false, error: '发送按钮不可用（等待超时，可能未满足字数或权限）' };
             }
             postBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
-            await delay(200);
+            await delay(300);
             postBtn.click();
             await delay(2500);
-            return { success: true };
+            var newReplyId = null;
+            try {
+                var links = document.querySelectorAll('article[data-testid="tweet"] a[href*="/status/"]');
+                for (var j = 0; j < links.length; j++) {
+                    var href = links[j].href || '';
+                    var match = href.match(/status\\/(\\d+)/);
+                    if (match && match[1] !== targetTweetId) {
+                        newReplyId = match[1];
+                        break;
+                    }
+                }
+            } catch (e) {}
+            return { success: true, tweetId: newReplyId || undefined };
         } catch (e) {
             return { success: false, error: e.message };
         }
@@ -1473,14 +1536,273 @@ async function postReplyViaMutation(browser, tabId, tweetId, replyText, safeExec
 }
 
 // ============================================================================
+// 发新帖：GraphQL（无 reply）
+// ============================================================================
+
+/**
+ * 生成通过 GraphQL CreateTweet 发新帖（无 reply）的浏览器端脚本
+ * variables 仅 tweet_text + dark_request，不传 reply
+ *
+ * @param {string} tweetText - 推文正文
+ * @param {string} queryId - CreateTweet queryId
+ * @param {object} [features] - 可选 features
+ */
+function buildCreateNewTweetScript(tweetText, queryId, features) {
+    const featuresToUse = features || DEFAULT_GRAPHQL_FEATURES;
+    const featuresLiteral = JSON.stringify(featuresToUse);
+    const variables = {
+        tweet_text: tweetText || '',
+        dark_request: false
+    };
+    const variablesStr = JSON.stringify(variables).replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+    return `
+    (async () => {
+        try {
+            const ct0 = document.cookie.match(/ct0=([^;]+)/)?.[1];
+            if (!ct0) {
+                return { success: false, error: '未找到 ct0 cookie，请确保已登录 X.com' };
+            }
+            const features = ${featuresLiteral};
+            const apiUrl = 'https://x.com/i/api/graphql/${queryId}/CreateTweet';
+            const body = JSON.stringify({
+                variables: ${variablesStr},
+                features: features,
+                fieldToggles: { withArticleRichContentState: false }
+            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            let response;
+            try {
+                response = await fetch(apiUrl, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    credentials: 'include',
+                    headers: {
+                        'authorization': '${BEARER_TOKEN}',
+                        'x-csrf-token': ct0,
+                        'x-twitter-auth-type': 'OAuth2Session',
+                        'x-twitter-active-user': 'yes',
+                        'content-type': 'application/json'
+                    },
+                    body: body
+                });
+                clearTimeout(timeoutId);
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    return { success: false, error: 'GraphQL 请求超时' };
+                }
+                return { success: false, error: fetchError.message };
+            }
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                return {
+                    success: false,
+                    error: 'HTTP ' + response.status,
+                    statusCode: response.status
+                };
+            }
+            const data = await response.json();
+            const err = data?.errors?.[0];
+            if (err) {
+                return { success: false, error: err.message || JSON.stringify(err) };
+            }
+            if (data?.data?.create_tweet !== undefined && data?.data?.create_tweet?.result?.rest_id) {
+                return { success: true, tweetId: data.data.create_tweet.result.rest_id };
+            }
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+async function postNewTweetViaMutation(browser, tabId, tweetText, safeExecuteScript) {
+    const disc = await safeExecuteScript(tabId, buildDiscoverCreateTweetQueryIdScript(), { timeout: 15000 });
+    if (!disc?.success || !disc.createTweetQueryId) {
+        return { success: false, error: '未发现 CreateTweet queryId' };
+    }
+    const script = buildCreateNewTweetScript(tweetText, disc.createTweetQueryId, disc.features);
+    const result = await safeExecuteScript(tabId, script, { timeout: 20000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+// ============================================================================
+// 发新帖：DOM 回退（首页 / intent）
+// ============================================================================
+
+/**
+ * 生成在首页或 intent 页通过 DOM 发新帖的浏览器端脚本
+ * 查找 composer（必要时先点击发推入口展开），填内容后点击 Post
+ *
+ * @param {string} tweetText - 推文正文
+ * @returns {string} 可在浏览器中执行的 IIFE 脚本
+ */
+function buildNewTweetViaDomScript(tweetText) {
+    const safeTweetText = JSON.stringify(tweetText || '');
+    return `
+    (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        const tweetText = ${safeTweetText};
+        try {
+            var composerRoot = document.querySelector('[role="dialog"]') || document.querySelector('[data-testid="tweetComposer"]') || document.body;
+            var isVisible = function(el) {
+                if (!el || !el.getBoundingClientRect) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+            };
+            var tryExpandComposer = function() {
+                var postBtn = document.querySelector('[data-testid="SideNav_NewTweet_Button"]');
+                if (postBtn && !document.querySelector('[data-testid="tweetTextarea_0"]')) {
+                    postBtn.click();
+                    return true;
+                }
+                return false;
+            };
+            tryExpandComposer();
+            await delay(1500);
+            let textarea = null;
+            for (var round = 0; round < 30; round++) {
+                var candidates = composerRoot.querySelectorAll('[data-testid="tweetTextarea_0"], [role="textbox"][contenteditable="true"], [contenteditable="true"]');
+                for (var k = 0; k < candidates.length; k++) {
+                    if (isVisible(candidates[k])) {
+                        textarea = candidates[k];
+                        break;
+                    }
+                }
+                if (textarea) break;
+                await delay(400);
+            }
+            if (!textarea) {
+                return { success: false, error: '未找到可见的发推输入框（等待超时）' };
+            }
+            textarea.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(250);
+            textarea.click();
+            await delay(200);
+            textarea.focus();
+            await delay(200);
+            if (textarea.contentEditable === 'true') {
+                for (var ci = 0; ci < tweetText.length; ci++) {
+                    var ch = tweetText[ci];
+                    if (document.execCommand) {
+                        document.execCommand('insertText', false, ch);
+                    } else {
+                        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+                        textarea.textContent = (textarea.textContent || '') + ch;
+                    }
+                    await delay(25);
+                }
+                textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: tweetText }));
+            } else {
+                textarea.value = tweetText;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            await delay(1200);
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: tweetText }));
+            await delay(800);
+            var root = composerRoot && composerRoot !== document.body ? composerRoot : document;
+            let postBtn = null;
+            for (var waitRound = 0; waitRound < 25; waitRound++) {
+                postBtn = root.querySelector('[data-testid="tweetButtonInline"]');
+                if (!postBtn) postBtn = root.querySelector('[data-testid="tweetButton"]');
+                if (!postBtn) {
+                    postBtn = Array.from(root.querySelectorAll('button[role="button"]')).find(function(b) {
+                        if (!isVisible(b)) return false;
+                        var t = (b.textContent || '').trim();
+                        return (t === 'Post' || t === '发推');
+                    });
+                }
+                if (postBtn && !postBtn.hasAttribute('disabled') && !postBtn.disabled && postBtn.getAttribute('aria-disabled') !== 'true') {
+                    break;
+                }
+                postBtn = null;
+                await delay(400);
+            }
+            if (!postBtn) {
+                return { success: false, error: '未找到发送按钮' };
+            }
+            if (postBtn.hasAttribute('disabled') || postBtn.disabled || postBtn.getAttribute('aria-disabled') === 'true') {
+                return { success: false, error: '发送按钮不可用（等待超时，可能未满足字数或权限）' };
+            }
+            postBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(300);
+            postBtn.click();
+            await delay(2500);
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+async function postNewTweetViaDom(browser, tabId, tweetText, safeExecuteScript) {
+    const script = buildNewTweetViaDomScript(tweetText);
+    const result = await safeExecuteScript(tabId, script, { timeout: 25000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+/**
+ * 从当前页面获取第一条推文的 ID（用于首页时间线发帖后取新帖 ID）
+ * @returns {string} 浏览器端脚本
+ */
+function buildGetFirstTweetIdFromPageScript() {
+    return `
+    (async () => {
+        try {
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+            await delay(1500);
+            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            for (const art of articles) {
+                const link = art.querySelector('a[href*="/status/"]');
+                if (link && link.href) {
+                    const m = link.href.match(/status\\/(\\d+)/);
+                    if (m) return { success: true, tweetId: m[1] };
+                }
+            }
+            return { success: false, error: '未找到推文 ID' };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+async function getFirstTweetIdFromPage(tabId, safeExecuteScript) {
+    const result = await safeExecuteScript(tabId, buildGetFirstTweetIdFromPageScript(), { timeout: 10000 });
+    return result;
+}
+
+// ============================================================================
 // 主流程
 // ============================================================================
 
 async function main() {
     const options = parseArgs();
 
-    if (options.tweetInputs.length === 0) {
-        console.error('错误: 请提供至少一个推文 URL 或 ID');
+    const hasPost = options.post != null && String(options.post).trim() !== '';
+    const hasThread = options.thread && options.thread.length > 0;
+
+    if (options.tweetInputs.length === 0 && !hasPost && !hasThread) {
+        console.error('错误: 请提供至少一个推文 URL/ID 或 --post/--thread');
+        printUsage();
+        process.exit(1);
+    }
+
+    if (hasPost && hasThread) {
+        console.error('错误: --post 与 --thread 互斥，请只使用其一');
+        printUsage();
+        process.exit(1);
+    }
+    if ((hasPost || hasThread) && options.tweetInputs.length > 0) {
+        console.error('错误: 发新帖/串推模式不能同时提供推文 URL 或 ID');
+        printUsage();
+        process.exit(1);
+    }
+    if ((hasPost || hasThread) && options.reply != null && String(options.reply).trim() !== '') {
+        console.error('错误: 发新帖/串推模式不能与 --reply 同时使用');
         printUsage();
         process.exit(1);
     }
@@ -1493,123 +1815,221 @@ async function main() {
     }
 
     const tweetIds = [];
-    for (const input of options.tweetInputs) {
-        const id = extractTweetId(input);
-        if (!id) {
-            console.error(`错误: 无法解析推文 ID: "${input}"`);
-            process.exit(1);
+    if (options.tweetInputs.length > 0) {
+        for (const input of options.tweetInputs) {
+            const id = extractTweetId(input);
+            if (!id) {
+                console.error(`错误: 无法解析推文 ID: "${input}"`);
+                process.exit(1);
+            }
+            tweetIds.push(id);
         }
-        tweetIds.push(id);
     }
+
+    if (hasThread && options.thread.length > options.threadMax) {
+        console.error(`错误: 串推条数 ${options.thread.length} 超过 --thread-max ${options.threadMax}`);
+        printUsage();
+        process.exit(1);
+    }
+
+    const isPostMode = hasPost || hasThread;
 
     let outputPath = options.output;
     let outputDir;
-    if (!outputPath) {
-        const timestamp = generateTimestamp();
-        const dirName = tweetIds.length === 1
-            ? `${tweetIds[0]}_${timestamp}`
-            : `batch_${timestamp}`;
-        outputDir = path.join(process.cwd(), 'work_dir', 'scrape', 'x_com_post', dirName);
-        outputPath = path.join(outputDir, 'data.json');
-    } else {
-        if (!path.isAbsolute(outputPath)) {
-            outputPath = path.join(process.cwd(), 'work_dir', 'scrape', 'x_com_post', outputPath);
+    if (!isPostMode) {
+        if (!outputPath) {
+            const timestamp = generateTimestamp();
+            const dirName = tweetIds.length === 1
+                ? `${tweetIds[0]}_${timestamp}`
+                : `batch_${timestamp}`;
+            outputDir = path.join(process.cwd(), 'work_dir', 'scrape', 'x_com_post', dirName);
+            outputPath = path.join(outputDir, 'data.json');
+        } else {
+            if (!path.isAbsolute(outputPath)) {
+                outputPath = path.join(process.cwd(), 'work_dir', 'scrape', 'x_com_post', outputPath);
+            }
+            outputDir = path.dirname(outputPath);
         }
-        outputDir = path.dirname(outputPath);
     }
 
     console.log('='.repeat(60));
     console.log('X.com 帖子内容抓取工具');
     console.log('='.repeat(60));
-    console.log(`推文数量: ${tweetIds.length}`);
-    tweetIds.forEach((id, i) => {
-        console.log(`  ${i + 1}. https://x.com/i/status/${id}`);
-    });
-    if (options.withThread) console.log('包含对话线程: 是');
-    if (options.withReplies > 0) console.log(`包含回复数: ${options.withReplies}`);
-    if (isReplyMode) {
-        console.log('回复模式: 是');
-        console.log('回复方式: ' + (options.replyStyle === 'reply' ? 'Replying to @xxx' : 'Thread（推文下点击回复）'));
-        console.log(`回复内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.reply).slice(0, 50)}${String(options.reply).length > 50 ? '...' : ''}"`);
+    if (isPostMode) {
+        if (hasPost) {
+            console.log('模式: 发新帖（单条）');
+            console.log(`内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.post).slice(0, 60)}${String(options.post).length > 60 ? '...' : ''}"`);
+        } else {
+            console.log('模式: 串推（thread）');
+            console.log(`条数: ${options.thread.length}`);
+            options.thread.forEach((seg, i) => {
+                console.log(`  ${i + 1}. ${String(seg).slice(0, 50)}${String(seg).length > 50 ? '...' : ''}`);
+            });
+            console.log(`段间延迟: ${options.threadDelay} ms`);
+        }
+    } else {
+        console.log(`推文数量: ${tweetIds.length}`);
+        tweetIds.forEach((id, i) => {
+            console.log(`  ${i + 1}. https://x.com/i/status/${id}`);
+        });
+        if (options.withThread) console.log('包含对话线程: 是');
+        if (options.withReplies > 0) console.log(`包含回复数: ${options.withReplies}`);
+        if (isReplyMode) {
+            console.log('回复模式: 是');
+            console.log('回复方式: ' + (options.replyStyle === 'reply' ? 'Replying to @xxx' : 'Thread（推文下点击回复）'));
+            console.log(`回复内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.reply).slice(0, 50)}${String(options.reply).length > 50 ? '...' : ''}"`);
+        }
     }
     console.log(`关闭 Tab: ${options.closeTab ? '是' : '否（保留复用）'}`);
-    console.log(`输出文件: ${outputPath}`);
+    if (!isPostMode) console.log(`输出文件: ${outputPath}`);
     console.log('='.repeat(60));
 
     const browser = new BrowserAutomation(options.browserServer);
 
     try {
-        const result = await getPost(browser, tweetIds, {
-            ...options,
-            logger: console,
-        });
-
-        const output = options.pretty
-            ? JSON.stringify(result, null, 2)
-            : JSON.stringify(result);
-        await saveToFile(outputPath, output);
-
-        const successResults = result.results.filter(r => r.success);
-        const failedResults = result.results.filter(r => !r.success);
-
-        console.log('\n' + '='.repeat(60));
-        console.log('抓取完成');
-        console.log('='.repeat(60));
-        console.log(`成功: ${successResults.length} / ${result.totalRequested}`);
-        if (failedResults.length > 0) {
-            console.log(`失败: ${failedResults.length}`);
-            failedResults.forEach(r => console.log(`  - ${r.tweetId}: ${r.error}`));
-        }
-        if (successResults.length > 0) {
-            const totalLikes = successResults.reduce((sum, t) => sum + (t.stats?.likes || 0), 0);
-            const totalRetweets = successResults.reduce((sum, t) => sum + (t.stats?.retweets || 0), 0);
-            const totalViews = successResults.reduce((sum, t) => sum + (t.stats?.views || 0), 0);
-            const totalMedia = successResults.reduce((sum, t) => sum + (t.mediaUrls?.length || 0), 0);
-            console.log(`\n总点赞: ${totalLikes.toLocaleString()}`);
-            console.log(`总转发: ${totalRetweets.toLocaleString()}`);
-            console.log(`总查看: ${totalViews.toLocaleString()}`);
-            if (totalMedia > 0) console.log(`总媒体: ${totalMedia} 个`);
-        }
-        console.log('='.repeat(60));
-
-        if (isReplyMode) {
-            const replyTweetId = tweetIds[0];
-            const useIntent = options.replyStyle === 'reply';
-            const replyUrl = useIntent
-                ? `https://x.com/intent/tweet?in_reply_to=${replyTweetId}`
-                : `https://x.com/i/status/${replyTweetId}`;
-            console.log('\n[回复] ' + (useIntent ? 'Replying to 式' : 'Thread 式') + '，获取标签页并打开...');
-            const tabResult = await acquireXTab(browser, replyUrl);
+        if (isPostMode) {
+            const homeUrl = 'https://x.com/home';
+            console.log('\n[发帖] 获取标签页并打开首页...');
+            const tabResult = await acquireXTab(browser, homeUrl);
             const tabId = tabResult.tabId;
             try {
                 if (!tabResult.isReused || tabResult.navigated) {
                     try { await waitForPageLoad(browser, tabId, { timeout: 30000 }); } catch (_) {}
                 }
-                await new Promise(r => setTimeout(r, useIntent ? 3500 : 4000));
+                await new Promise(r => setTimeout(r, 3500));
+                const safeExecuteScript = createSafeExecuteScript(browser);
+
                 if (options.dryRun) {
-                    console.log('--dry-run: 将对该推文发送回复，内容为:');
-                    console.log('  ' + String(options.reply));
-                    console.log('(未实际发送)');
-                } else {
-                    const safeExecuteScript = createSafeExecuteScript(browser);
-                    let replyResult;
-                    if (useIntent) {
-                        replyResult = await postReplyViaIntent(browser, tabId, options.reply, safeExecuteScript);
+                    if (hasPost) {
+                        console.log('--dry-run: 将发送新帖，内容为:');
+                        console.log('  ' + String(options.post));
                     } else {
-                        replyResult = await postReplyViaMutation(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
-                        if (!replyResult.success) {
-                            console.log('[回复] GraphQL 不可用，回退到 DOM:', replyResult.error || '');
-                            replyResult = await postReplyViaDom(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                        console.log('--dry-run: 将发送串推，共 ' + options.thread.length + ' 条:');
+                        options.thread.forEach((seg, i) => console.log('  ' + (i + 1) + '. ' + seg));
+                    }
+                    console.log('(未实际发送)');
+                } else if (hasPost) {
+                    const result = await postNewTweetViaDom(browser, tabId, options.post, safeExecuteScript);
+                    if (result.success) {
+                        console.log('新帖已发送' + (result.tweetId ? '，ID: ' + result.tweetId : ''));
+                    } else {
+                        console.error('发新帖失败:', result.error || '未知错误');
+                    }
+                } else {
+                    const postedIds = [];
+                    let lastId = null;
+                    const delayMs = Math.max(2000, options.threadDelay);
+                    for (let i = 0; i < options.thread.length; i++) {
+                        if (i > 0) {
+                            console.log(`  等待 ${delayMs / 1000} 秒间隔...`);
+                            await new Promise(r => setTimeout(r, delayMs));
+                        }
+                        const text = options.thread[i];
+                        let result;
+                        if (i === 0) {
+                            result = await postNewTweetViaDom(browser, tabId, text, safeExecuteScript);
+                            if (result.success) {
+                                console.log(`  等待 ${delayMs / 1000} 秒间隔...`);
+                                await new Promise(r => setTimeout(r, delayMs));
+                                const idResult = await getFirstTweetIdFromPage(tabId, safeExecuteScript);
+                                if (idResult?.success && idResult.tweetId) {
+                                    lastId = idResult.tweetId;
+                                    postedIds.push(lastId);
+                                }
+                            }
+                        } else {
+                            await browser.openUrl('https://x.com/i/status/' + lastId, tabId);
+                            await new Promise(r => setTimeout(r, 5000));
+                            result = await postReplyViaDom(browser, tabId, lastId, text, safeExecuteScript);
+                            if (result.success && result.tweetId) {
+                                lastId = result.tweetId;
+                                postedIds.push(lastId);
+                            }
+                        }
+                        if (result && result.success) {
+                            console.log(`  [${i + 1}/${options.thread.length}] 已发送`);
+                        } else if (result && !result.success) {
+                            console.error(`  [${i + 1}/${options.thread.length}] 失败: ${result.error || '未知错误'}`);
+                            break;
+                        }
+                        if (i === 0 && result && result.success && !lastId) {
+                            console.log('  [1/' + options.thread.length + '] 已发送（未取得 ID，后续条数无法继续）');
+                            break;
                         }
                     }
-                    if (replyResult.success) {
-                        console.log('回复已发送');
-                    } else {
-                        console.error('回复失败:', replyResult.error || '未知错误');
+                    if (postedIds.length > 0) {
+                        console.log('串推已发送 ' + postedIds.length + ' 条，ID: ' + postedIds.join(', '));
                     }
                 }
             } finally {
                 await releaseXTab(browser, tabId, !options.closeTab);
+            }
+        } else {
+            const result = await getPost(browser, tweetIds, {
+                ...options,
+                logger: console,
+            });
+
+            const output = options.pretty
+                ? JSON.stringify(result, null, 2)
+                : JSON.stringify(result);
+            await saveToFile(outputPath, output);
+
+            const successResults = result.results.filter(r => r.success);
+            const failedResults = result.results.filter(r => !r.success);
+
+            console.log('\n' + '='.repeat(60));
+            console.log('抓取完成');
+            console.log('='.repeat(60));
+            console.log(`成功: ${successResults.length} / ${result.totalRequested}`);
+            if (failedResults.length > 0) {
+                console.log(`失败: ${failedResults.length}`);
+                failedResults.forEach(r => console.log(`  - ${r.tweetId}: ${r.error}`));
+            }
+            if (successResults.length > 0) {
+                const totalLikes = successResults.reduce((sum, t) => sum + (t.stats?.likes || 0), 0);
+                const totalRetweets = successResults.reduce((sum, t) => sum + (t.stats?.retweets || 0), 0);
+                const totalViews = successResults.reduce((sum, t) => sum + (t.stats?.views || 0), 0);
+                const totalMedia = successResults.reduce((sum, t) => sum + (t.mediaUrls?.length || 0), 0);
+                console.log(`\n总点赞: ${totalLikes.toLocaleString()}`);
+                console.log(`总转发: ${totalRetweets.toLocaleString()}`);
+                console.log(`总查看: ${totalViews.toLocaleString()}`);
+                if (totalMedia > 0) console.log(`总媒体: ${totalMedia} 个`);
+            }
+            console.log('='.repeat(60));
+
+            if (isReplyMode) {
+                const replyTweetId = tweetIds[0];
+                const useIntent = options.replyStyle === 'reply';
+                const replyUrl = useIntent
+                    ? `https://x.com/intent/tweet?in_reply_to=${replyTweetId}`
+                    : `https://x.com/i/status/${replyTweetId}`;
+                console.log('\n[回复] ' + (useIntent ? 'Replying to 式' : 'Thread 式') + '，获取标签页并打开...');
+                const tabResult = await acquireXTab(browser, replyUrl);
+                const tabId = tabResult.tabId;
+                try {
+                    if (!tabResult.isReused || tabResult.navigated) {
+                        try { await waitForPageLoad(browser, tabId, { timeout: 30000 }); } catch (_) {}
+                    }
+                    await new Promise(r => setTimeout(r, useIntent ? 3500 : 4000));
+                    if (options.dryRun) {
+                        console.log('--dry-run: 将对该推文发送回复，内容为:');
+                        console.log('  ' + String(options.reply));
+                        console.log('(未实际发送)');
+                    } else {
+                        const safeExecuteScript = createSafeExecuteScript(browser);
+                        const replyResult = useIntent
+                            ? await postReplyViaIntent(browser, tabId, options.reply, safeExecuteScript)
+                            : await postReplyViaDom(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                        if (replyResult.success) {
+                            console.log('回复已发送');
+                        } else {
+                            console.error('回复失败:', replyResult.error || '未知错误');
+                        }
+                    }
+                } finally {
+                    await releaseXTab(browser, tabId, !options.closeTab);
+                }
             }
         }
 
@@ -1643,7 +2063,11 @@ module.exports = {
     postReplyViaIntent,
     buildDiscoverCreateTweetQueryIdScript,
     buildCreateReplyScript,
-    postReplyViaMutation
+    postReplyViaMutation,
+    buildCreateNewTweetScript,
+    postNewTweetViaMutation,
+    buildNewTweetViaDomScript,
+    postNewTweetViaDom
 };
 
 if (require.main === module) {

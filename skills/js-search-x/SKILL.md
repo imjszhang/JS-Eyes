@@ -87,6 +87,12 @@ node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "回
 # 仅打印回复内容不实际发送
 node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "测试" --dry-run
 
+# 发一条新帖（无需 URL/ID）
+node skills/js-search-x/index.js post --post "新帖内容"
+# 发串推（thread：多条首尾相连）
+node skills/js-search-x/index.js post --thread "段1" "段2" "段3" --thread-delay 2000
+# 发帖/串推也可用 --dry-run 仅打印不发送
+
 # 首页推荐
 node skills/js-search-x/index.js home --feed foryou --max-pages 5
 ```
@@ -101,6 +107,8 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 6. 支持自动重试、queryId 过期重新发现、429 速率限制保护
 
 **发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+
+**发新帖与串推**：`post` 命令支持 `--post "内容"` 发一条新帖，或 `--thread "段1" "段2" ...` 发 X 特色串推（第 2 条起依次回复上一条）。同样优先 GraphQL CreateTweet，失败时单条新帖可回退到首页 DOM 发推。串推支持 `--thread-delay`（段间延迟毫秒）、`--thread-max`（最大条数）。均为写操作，请注意限流与账号安全；可使用 `--dry-run` 仅打印不发送。
 
 ## 目录结构
 

@@ -45,6 +45,8 @@ function printUsage() {
     console.log('  node index.js search "AI agent" --max-pages 3');
     console.log('  node index.js profile elonmusk --max-pages 10 --pretty');
     console.log('  node index.js post https://x.com/user/status/123 --with-thread');
+    console.log('  node index.js post --post "新帖内容"');
+    console.log('  node index.js post --thread "段1" "段2" "段3" --thread-delay 2000');
     console.log('  node index.js home --feed following');
     console.log('\n注意事项:');
     console.log('  - 需要 JS-Eyes Server 运行中，且浏览器已安装 JS-Eyes 扩展并登录 X.com');
