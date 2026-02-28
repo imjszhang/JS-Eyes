@@ -14,6 +14,9 @@
  *   --browser-server <url>     JS-Eyes WebSocket 服务器地址（默认 ws://localhost:18080）
  *   --output <file>            指定输出文件路径
  *   --close-tab                抓完后关闭 tab（默认保留供下次复用）
+ *   --reply "内容"             对指定推文发表回复（仅支持单条推文）
+ *   --reply-style reply|thread  reply=Replying to @xxx 式（默认）；thread=推文下点击回复
+ *   --dry-run                  与 --reply 同用时仅打印回复内容，不实际发送
  * 
  * 文件保存位置:
  *   work_dir/scrape/x_com_post/{tweetId}_{timestamp}/data.json
@@ -26,6 +29,8 @@
  *   node scripts/x-post.js https://x.com/user/status/123 --with-replies 50
  *   node scripts/x-post.js https://x.com/user/status/123 --with-replies 200 --with-thread
  *   node scripts/x-post.js 1234567890 --output my_post.json --close-tab
+ *   node scripts/x-post.js https://x.com/user/status/123 --reply "回复内容"
+ *   node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run
  * 
  * 注意:
  *   - 需要 JS-Eyes Server 运行中，且浏览器已安装 JS-Eyes 扩展并登录 X.com
@@ -67,7 +72,10 @@ function parseArgs() {
         pretty: false,
         browserServer: null,
         output: null,
-        closeTab: false
+        closeTab: false,
+        reply: null,           // 回复内容，非空时进入回复模式
+        dryRun: false,         // 仅打印不发送
+        replyStyle: 'reply'    // 'reply' = Replying to @xxx 式回复；'thread' = 点击推文下回复按钮（可能呈 thread）
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -98,6 +106,18 @@ function parseArgs() {
                     break;
                 case 'closetab':
                     options.closeTab = true;
+                    break;
+                case 'reply':
+                    options.reply = typeof nextArg === 'string' ? nextArg : '';
+                    if (options.reply) i++;
+                    break;
+                case 'dryrun':
+                    options.dryRun = true;
+                    break;
+                case 'replystyle':
+                    const style = (nextArg || '').toLowerCase();
+                    if (style === 'thread' || style === 'reply') options.replyStyle = style;
+                    if (nextArg) i++;
                     break;
                 default:
                     console.warn(`未知选项: ${arg}`);
@@ -141,11 +161,18 @@ function printUsage() {
     console.log('  --browser-server <url>     浏览器服务器地址');
     console.log('  --output <file>            指定输出文件路径');
     console.log('  --close-tab                抓完后关闭 tab（默认保留）');
+    console.log('  --reply "内容"             对指定推文发表回复（回复模式，仅支持单条推文）');
+    console.log('  --reply-style <reply|thread>  reply=Replying to @xxx 式（默认）；thread=推文下点击回复（可能呈 thread）');
+    console.log('  --dry-run                  与 --reply 同用时仅打印回复内容，不实际发送');
     console.log('\n示例:');
     console.log('  node scripts/x-post.js https://x.com/elonmusk/status/1234567890');
     console.log('  node scripts/x-post.js 1234567890 9876543210 --pretty');
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --with-thread');
     console.log('  node scripts/x-post.js https://x.com/user/status/123 --with-replies 100');
+    console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "回复内容"');
+    console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "回复" --reply-style reply');
+    console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "续推" --reply-style thread');
+    console.log('  node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run');
 }
 
 // ============================================================================
@@ -1049,6 +1076,403 @@ function buildPostDomScript(tweetId) {
 }
 
 // ============================================================================
+// 回复：DOM 方案
+// ============================================================================
+
+/**
+ * 生成通过 DOM 发表回复的浏览器端脚本
+ * 定位目标推文的回复按钮，点击后填写 composer 并点击发送
+ *
+ * @param {string} tweetId - 被回复的推文 ID
+ * @param {string} replyText - 回复正文
+ * @returns {string} 可在浏览器中执行的 IIFE 脚本
+ */
+function buildReplyViaDomScript(tweetId, replyText) {
+    const safeReplyText = JSON.stringify(replyText || '');
+    const safeTweetId = String(tweetId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `
+    (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        const replyText = ${safeReplyText};
+        const targetTweetId = '${safeTweetId}';
+        try {
+            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            let targetArticle = null;
+            for (const art of articles) {
+                const link = art.querySelector('a[href*="/status/' + targetTweetId + '"]');
+                if (link) {
+                    targetArticle = art;
+                    break;
+                }
+            }
+            if (!targetArticle) targetArticle = articles[0];
+            if (!targetArticle) {
+                return { success: false, error: '未找到推文区域' };
+            }
+            const replyBtn = targetArticle.querySelector('[data-testid="reply"]');
+            if (!replyBtn) {
+                return { success: false, error: '未找到回复按钮' };
+            }
+            replyBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(300);
+            replyBtn.click();
+            await delay(1500);
+            var composerRoot = document.querySelector('[role="dialog"]') || document.querySelector('[data-testid="tweetComposer"]') || document.body;
+            var isVisible = function(el) {
+                if (!el || !el.getBoundingClientRect) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+            };
+            let textarea = null;
+            for (var round = 0; round < 25; round++) {
+                var candidates = composerRoot.querySelectorAll('[data-testid="tweetTextarea_0"], [role="textbox"][contenteditable="true"], [contenteditable="true"]');
+                for (var k = 0; k < candidates.length; k++) {
+                    if (isVisible(candidates[k])) {
+                        textarea = candidates[k];
+                        break;
+                    }
+                }
+                if (textarea) break;
+                await delay(350);
+            }
+            if (!textarea) {
+                return { success: false, error: '未找到可见的回复输入框（等待超时）' };
+            }
+            textarea.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(250);
+            textarea.click();
+            await delay(200);
+            textarea.focus();
+            await delay(200);
+            if (textarea.contentEditable === 'true') {
+                textarea.focus();
+                for (var ci = 0; ci < replyText.length; ci++) {
+                    var ch = replyText[ci];
+                    if (document.execCommand) {
+                        document.execCommand('insertText', false, ch);
+                    } else {
+                        var sel = window.getSelection();
+                        var range = document.createRange();
+                        textarea.focus();
+                        if (textarea.childNodes.length) {
+                            range.setStart(textarea.childNodes[0], (textarea.textContent || '').length);
+                        } else {
+                            range.setStart(textarea, 0);
+                        }
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+                        textarea.textContent = (textarea.textContent || '') + ch;
+                    }
+                    await delay(25);
+                }
+                textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: replyText }));
+            } else {
+                textarea.value = replyText;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            await delay(700);
+            let postBtn = document.querySelector('[data-testid="tweetButtonInline"]');
+            if (!postBtn) postBtn = document.querySelector('[data-testid="tweetButton"]');
+            if (!postBtn) {
+                postBtn = Array.from(document.querySelectorAll('button[role="button"]')).find(function(b) {
+                    var t = (b.textContent || '').trim();
+                    return (t === 'Post' || t === 'Reply' || t === '发推' || t === '回复') && !b.disabled && !b.hasAttribute('disabled');
+                });
+            }
+            if (!postBtn) {
+                return { success: false, error: '未找到发送按钮' };
+            }
+            if (postBtn.hasAttribute('disabled') || postBtn.disabled) {
+                return { success: false, error: '发送按钮不可用（可能未满足字数或权限）' };
+            }
+            postBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(200);
+            postBtn.click();
+            await delay(2500);
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+/**
+ * 生成在 intent 页面 (x.com/intent/tweet?in_reply_to=xxx) 填写并发送的脚本
+ * 该页面会打开「Replying to @xxx」式回复框，不会形成 thread
+ *
+ * @param {string} replyText - 回复正文
+ * @returns {string} 可在浏览器中执行的 IIFE 脚本
+ */
+function buildReplyViaIntentScript(replyText) {
+    const safeReplyText = JSON.stringify(replyText || '');
+    return `
+    (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        const replyText = ${safeReplyText};
+        try {
+            await delay(3500);
+            var composerRoot = document.querySelector('[role="dialog"]') || document.querySelector('[data-testid="tweetComposer"]') || document.body;
+            var isVisible = function(el) {
+                if (!el || !el.getBoundingClientRect) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+            };
+            let textarea = null;
+            for (var round = 0; round < 35; round++) {
+                var candidates = composerRoot.querySelectorAll('[data-testid="tweetTextarea_0"], [role="textbox"][contenteditable="true"], [contenteditable="true"]');
+                for (var k = 0; k < candidates.length; k++) {
+                    if (isVisible(candidates[k])) {
+                        textarea = candidates[k];
+                        break;
+                    }
+                }
+                if (textarea) break;
+                await delay(400);
+            }
+            if (!textarea) {
+                return { success: false, error: '未找到可见的输入框（intent 页等待超时）' };
+            }
+            textarea.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(300);
+            textarea.click();
+            await delay(250);
+            textarea.focus();
+            await delay(250);
+            if (textarea.contentEditable === 'true') {
+                for (var ci = 0; ci < replyText.length; ci++) {
+                    var ch = replyText[ci];
+                    if (document.execCommand) {
+                        document.execCommand('insertText', false, ch);
+                    } else {
+                        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+                        textarea.textContent = (textarea.textContent || '') + ch;
+                    }
+                    await delay(30);
+                }
+                textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: replyText }));
+            } else {
+                textarea.value = replyText;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            await delay(1200);
+            var root = composerRoot && composerRoot !== document.body ? composerRoot : document;
+            let postBtn = root.querySelector('[data-testid="tweetButtonInline"]');
+            if (!postBtn) postBtn = root.querySelector('[data-testid="tweetButton"]');
+            if (!postBtn) {
+                postBtn = Array.from(root.querySelectorAll('button[role="button"]')).find(function(b) {
+                    var t = (b.textContent || '').trim();
+                    return (t === 'Post' || t === 'Reply' || t === '发推' || t === '回复') && !b.disabled && !b.hasAttribute('disabled');
+                });
+            }
+            if (!postBtn) {
+                return { success: false, error: '未找到发送按钮' };
+            }
+            if (postBtn.hasAttribute('disabled') || postBtn.getAttribute('aria-disabled') === 'true' || postBtn.disabled) {
+                return { success: false, error: '发送按钮不可用（可能内容未正确填入）' };
+            }
+            postBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(200);
+            postBtn.click();
+            await delay(2500);
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+/**
+ * 在 intent 页面执行回复（Replying to @xxx 式）
+ */
+async function postReplyViaIntent(browser, tabId, replyText, safeExecuteScript) {
+    const script = buildReplyViaIntentScript(replyText);
+    const result = await safeExecuteScript(tabId, script, { timeout: 20000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+/**
+ * 通过 DOM 对指定推文发表回复
+ *
+ * @param {object} browser - BrowserAutomation 实例
+ * @param {string} tabId - 标签页 ID
+ * @param {string} tweetId - 被回复的推文 ID
+ * @param {string} replyText - 回复正文
+ * @param {function} safeExecuteScript - createSafeExecuteScript(browser) 返回的函数
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function postReplyViaDom(browser, tabId, tweetId, replyText, safeExecuteScript) {
+    const script = buildReplyViaDomScript(tweetId, replyText);
+    const result = await safeExecuteScript(tabId, script, { timeout: 15000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+// ============================================================================
+// 回复：GraphQL Mutation 方案（可选优先）
+// ============================================================================
+
+/**
+ * 生成动态发现 CreateTweet mutation queryId 的浏览器端脚本
+ * 从 performance 或 JS bundle 中查找 CreateTweet operation 的 queryId
+ */
+function buildDiscoverCreateTweetQueryIdScript() {
+    return `
+    (async () => {
+        try {
+            let createTweetQueryId = null;
+            let features = null;
+            const parseFeatures = (urlStr) => {
+                try {
+                    const url = new URL(urlStr);
+                    const fp = url.searchParams.get('features');
+                    if (fp) return JSON.parse(fp);
+                } catch (e) {}
+                return null;
+            };
+            try {
+                const resources = performance.getEntriesByType('resource');
+                for (const r of resources) {
+                    const m = r.name.match(/graphql\\/([A-Za-z0-9_-]+)\\/CreateTweet/);
+                    if (m) {
+                        createTweetQueryId = m[1];
+                        features = features || parseFeatures(r.name);
+                        break;
+                    }
+                }
+            } catch (e) {}
+            if (!createTweetQueryId) {
+                try {
+                    const scripts = document.querySelectorAll('script[src]');
+                    const bundleUrls = [];
+                    for (const script of scripts) {
+                        const src = script.getAttribute('src') || '';
+                        if (src.includes('/client-web/') || src.includes('main.')) {
+                            bundleUrls.push(src.startsWith('http') ? src : 'https://x.com' + src);
+                        }
+                    }
+                    for (const bundleUrl of bundleUrls.slice(0, 8)) {
+                        try {
+                            const resp = await fetch(bundleUrl);
+                            if (!resp.ok) continue;
+                            const text = await resp.text();
+                            const m = text.match(/queryId:"([A-Za-z0-9_-]+)",operationName:"CreateTweet"/);
+                            if (m) {
+                                createTweetQueryId = m[1];
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                } catch (e) {}
+            }
+            return { success: true, createTweetQueryId, features };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+/**
+ * 生成通过 GraphQL CreateTweet 发表回复的浏览器端脚本
+ * variables 结构随 X 前端可能变化，失败时由上层回退到 DOM
+ *
+ * @param {string} tweetId - 被回复的推文 ID
+ * @param {string} replyText - 回复正文
+ * @param {string} queryId - 动态发现的 CreateTweet queryId
+ * @param {object} [features] - 可选 features
+ */
+function buildCreateReplyScript(tweetId, replyText, queryId, features) {
+    const featuresToUse = features || DEFAULT_GRAPHQL_FEATURES;
+    const featuresLiteral = JSON.stringify(featuresToUse);
+    const variables = {
+        tweet_text: replyText || '',
+        reply: {
+            in_reply_to_tweet_id: String(tweetId),
+            exclude_reply_user_ids: []
+        },
+        dark_request: false
+    };
+    const variablesStr = JSON.stringify(variables).replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+    return `
+    (async () => {
+        try {
+            const ct0 = document.cookie.match(/ct0=([^;]+)/)?.[1];
+            if (!ct0) {
+                return { success: false, error: '未找到 ct0 cookie，请确保已登录 X.com' };
+            }
+            const features = ${featuresLiteral};
+            const apiUrl = 'https://x.com/i/api/graphql/${queryId}/CreateTweet';
+            const body = JSON.stringify({
+                variables: ${variablesStr},
+                features: features,
+                fieldToggles: { withArticleRichContentState: false }
+            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            let response;
+            try {
+                response = await fetch(apiUrl, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    credentials: 'include',
+                    headers: {
+                        'authorization': '${BEARER_TOKEN}',
+                        'x-csrf-token': ct0,
+                        'x-twitter-auth-type': 'OAuth2Session',
+                        'x-twitter-active-user': 'yes',
+                        'content-type': 'application/json'
+                    },
+                    body: body
+                });
+                clearTimeout(timeoutId);
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    return { success: false, error: 'GraphQL 请求超时' };
+                }
+                return { success: false, error: fetchError.message };
+            }
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                return {
+                    success: false,
+                    error: 'HTTP ' + response.status,
+                    statusCode: response.status
+                };
+            }
+            const data = await response.json();
+            const err = data?.errors?.[0];
+            if (err) {
+                return { success: false, error: err.message || JSON.stringify(err) };
+            }
+            if (data?.data?.create_tweet !== undefined && data?.data?.create_tweet?.result?.rest_id) {
+                return { success: true, tweetId: data.data.create_tweet.result.rest_id };
+            }
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+/**
+ * 优先尝试 GraphQL 发回复，失败则返回以便上层回退 DOM
+ */
+async function postReplyViaMutation(browser, tabId, tweetId, replyText, safeExecuteScript) {
+    const disc = await safeExecuteScript(tabId, buildDiscoverCreateTweetQueryIdScript(), { timeout: 15000 });
+    if (!disc?.success || !disc.createTweetQueryId) {
+        return { success: false, error: '未发现 CreateTweet queryId' };
+    }
+    const script = buildCreateReplyScript(tweetId, replyText, disc.createTweetQueryId, disc.features);
+    const result = await safeExecuteScript(tabId, script, { timeout: 20000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
+// ============================================================================
 // 主流程
 // ============================================================================
 
@@ -1057,6 +1481,13 @@ async function main() {
 
     if (options.tweetInputs.length === 0) {
         console.error('错误: 请提供至少一个推文 URL 或 ID');
+        printUsage();
+        process.exit(1);
+    }
+
+    const isReplyMode = options.reply != null && String(options.reply).trim() !== '';
+    if (isReplyMode && options.tweetInputs.length > 1) {
+        console.error('错误: 回复模式仅支持单条推文，请只提供一个 URL 或 ID');
         printUsage();
         process.exit(1);
     }
@@ -1096,6 +1527,11 @@ async function main() {
     });
     if (options.withThread) console.log('包含对话线程: 是');
     if (options.withReplies > 0) console.log(`包含回复数: ${options.withReplies}`);
+    if (isReplyMode) {
+        console.log('回复模式: 是');
+        console.log('回复方式: ' + (options.replyStyle === 'reply' ? 'Replying to @xxx' : 'Thread（推文下点击回复）'));
+        console.log(`回复内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.reply).slice(0, 50)}${String(options.reply).length > 50 ? '...' : ''}"`);
+    }
     console.log(`关闭 Tab: ${options.closeTab ? '是' : '否（保留复用）'}`);
     console.log(`输出文件: ${outputPath}`);
     console.log('='.repeat(60));
@@ -1135,6 +1571,48 @@ async function main() {
             if (totalMedia > 0) console.log(`总媒体: ${totalMedia} 个`);
         }
         console.log('='.repeat(60));
+
+        if (isReplyMode) {
+            const replyTweetId = tweetIds[0];
+            const useIntent = options.replyStyle === 'reply';
+            const replyUrl = useIntent
+                ? `https://x.com/intent/tweet?in_reply_to=${replyTweetId}`
+                : `https://x.com/i/status/${replyTweetId}`;
+            console.log('\n[回复] ' + (useIntent ? 'Replying to 式' : 'Thread 式') + '，获取标签页并打开...');
+            const tabResult = await acquireXTab(browser, replyUrl);
+            const tabId = tabResult.tabId;
+            try {
+                if (!tabResult.isReused || tabResult.navigated) {
+                    try { await waitForPageLoad(browser, tabId, { timeout: 30000 }); } catch (_) {}
+                }
+                await new Promise(r => setTimeout(r, useIntent ? 3500 : 4000));
+                if (options.dryRun) {
+                    console.log('--dry-run: 将对该推文发送回复，内容为:');
+                    console.log('  ' + String(options.reply));
+                    console.log('(未实际发送)');
+                } else {
+                    const safeExecuteScript = createSafeExecuteScript(browser);
+                    let replyResult;
+                    if (useIntent) {
+                        replyResult = await postReplyViaIntent(browser, tabId, options.reply, safeExecuteScript);
+                    } else {
+                        replyResult = await postReplyViaMutation(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                        if (!replyResult.success) {
+                            console.log('[回复] GraphQL 不可用，回退到 DOM:', replyResult.error || '');
+                            replyResult = await postReplyViaDom(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                        }
+                    }
+                    if (replyResult.success) {
+                        console.log('回复已发送');
+                    } else {
+                        console.error('回复失败:', replyResult.error || '未知错误');
+                    }
+                }
+            } finally {
+                await releaseXTab(browser, tabId, !options.closeTab);
+            }
+        }
+
         browser.disconnect();
 
     } catch (error) {
@@ -1158,7 +1636,14 @@ module.exports = {
     buildTweetDetailCursorScript,
     buildParseTweetResultSnippet,
     buildTweetByRestIdScript,
-    buildPostDomScript
+    buildPostDomScript,
+    buildReplyViaDomScript,
+    postReplyViaDom,
+    buildReplyViaIntentScript,
+    postReplyViaIntent,
+    buildDiscoverCreateTweetQueryIdScript,
+    buildCreateReplyScript,
+    postReplyViaMutation
 };
 
 if (require.main === module) {

@@ -82,6 +82,11 @@ node skills/js-search-x/index.js profile elonmusk --max-pages 10
 # 推文详情
 node skills/js-search-x/index.js post https://x.com/user/status/123 --with-thread
 
+# 对指定推文发表回复（先抓取该帖再发送回复；仅支持单条推文）
+node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "回复内容"
+# 仅打印回复内容不实际发送
+node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "测试" --dry-run
+
 # 首页推荐
 node skills/js-search-x/index.js home --feed foryou --max-pages 5
 ```
@@ -94,6 +99,8 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 4. 解析 API 响应提取推文数据
 5. GraphQL 失败时自动回退到 DOM 提取
 6. 支持自动重试、queryId 过期重新发现、429 速率限制保护
+
+**发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
 
 ## 目录结构
 
