@@ -1135,9 +1135,10 @@ function buildReplyViaDomScript(tweetId, replyText) {
         const replyText = ${safeReplyText};
         const targetTweetId = '${safeTweetId}';
         try {
-            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            var articles = document.querySelectorAll('article[data-testid="tweet"]');
             let targetArticle = null;
-            for (const art of articles) {
+            for (var artIdx = 0; artIdx < articles.length; artIdx++) {
+                var art = articles[artIdx];
                 const link = art.querySelector('a[href*="/status/' + targetTweetId + '"]');
                 if (link) {
                     targetArticle = art;
@@ -1244,14 +1245,20 @@ function buildReplyViaDomScript(tweetId, replyText) {
             await delay(2500);
             var newReplyId = null;
             try {
-                var links = document.querySelectorAll('article[data-testid="tweet"] a[href*="/status/"]');
-                for (var j = 0; j < links.length; j++) {
-                    var href = links[j].href || '';
-                    var match = href.match(/status\\/(\\d+)/);
-                    if (match && match[1] !== targetTweetId) {
-                        newReplyId = match[1];
+                var articles = document.querySelectorAll('article[data-testid="tweet"]');
+                var focalIndex = -1;
+                for (var j = 0; j < articles.length; j++) {
+                    var linkInArt = articles[j].querySelector('a[href*="/status/' + targetTweetId + '"]');
+                    if (linkInArt) {
+                        focalIndex = j;
                         break;
                     }
+                }
+                var replyArticle = focalIndex >= 0 && focalIndex + 1 < articles.length ? articles[focalIndex + 1] : articles[0];
+                var replyLink = replyArticle ? replyArticle.querySelector('a[href*="/status/"]') : null;
+                if (replyLink && replyLink.href) {
+                    var m = replyLink.href.match(/status\\/(\\d+)/);
+                    if (m) newReplyId = m[1];
                 }
             } catch (e) {}
             return { success: true, tweetId: newReplyId || undefined };
@@ -1745,24 +1752,45 @@ async function postNewTweetViaDom(browser, tabId, tweetText, safeExecuteScript) 
 }
 
 /**
- * 从当前页面获取第一条推文的 ID（用于首页时间线发帖后取新帖 ID）
+ * 从当前页面获取指定内容推文的 ID（用于首页时间线发帖后取「刚发的那条」的 ID）
+ * 若传入 matchText，会多等并重试，避免发帖后界面未及时更新导致找不到
+ * @param {string} [matchText] - 若传入，则查找内容包含此文本的推文（用于串推第 1 条后精确定位自己发的）；不传则取页面第一条推文
  * @returns {string} 浏览器端脚本
  */
-function buildGetFirstTweetIdFromPageScript() {
+function buildGetFirstTweetIdFromPageScript(matchText) {
+    const hasMatch = matchText != null && String(matchText).trim() !== '';
+    const searchStr = hasMatch ? JSON.stringify(String(matchText).trim()) : 'null';
     return `
     (async () => {
         try {
             const delay = ms => new Promise(r => setTimeout(r, ms));
-            await delay(1500);
-            const articles = document.querySelectorAll('article[data-testid="tweet"]');
-            for (const art of articles) {
-                const link = art.querySelector('a[href*="/status/"]');
-                if (link && link.href) {
-                    const m = link.href.match(/status\\/(\\d+)/);
-                    if (m) return { success: true, tweetId: m[1] };
+            const matchText = ${searchStr};
+            var initialWait = matchText ? 5000 : 2000;
+            var maxTries = matchText ? 5 : 1;
+            for (var tryNum = 0; tryNum < maxTries; tryNum++) {
+                await delay(tryNum === 0 ? initialWait : 2500);
+                var articles = document.querySelectorAll('article[data-testid="tweet"]');
+                var firstTweetId = null;
+                for (var ai = 0; ai < articles.length; ai++) {
+                    var art = articles[ai];
+                    var link = art.querySelector('a[href*="/status/"]');
+                    if (link && link.href) {
+                        var mat = link.href.match(/status\\/(\\d+)/);
+                        if (mat && !firstTweetId) firstTweetId = mat[1];
+                        if (matchText) {
+                            var tweetTextEl = art.querySelector('[data-testid="tweetText"]');
+                            var bodyText = tweetTextEl ? (tweetTextEl.textContent || '').trim() : (art.textContent || '').trim();
+                            var snippet = matchText.length > 30 ? matchText.substring(0, 30) : matchText;
+                            if (bodyText.indexOf(matchText) === -1 && bodyText.indexOf(snippet) === -1) continue;
+                        }
+                        if (mat) return { success: true, tweetId: mat[1] };
+                    }
+                }
+                if (matchText && firstTweetId) {
+                    return { success: true, tweetId: firstTweetId, fallback: true };
                 }
             }
-            return { success: false, error: '未找到推文 ID' };
+            return { success: false, error: matchText ? '未找到内容匹配的推文 ID（界面可能尚未更新）' : '未找到推文 ID' };
         } catch (e) {
             return { success: false, error: e.message };
         }
@@ -1770,8 +1798,9 @@ function buildGetFirstTweetIdFromPageScript() {
     `;
 }
 
-async function getFirstTweetIdFromPage(tabId, safeExecuteScript) {
-    const result = await safeExecuteScript(tabId, buildGetFirstTweetIdFromPageScript(), { timeout: 10000 });
+async function getFirstTweetIdFromPage(tabId, safeExecuteScript, matchText) {
+    const timeout = matchText ? 28000 : 12000;
+    const result = await safeExecuteScript(tabId, buildGetFirstTweetIdFromPageScript(matchText), { timeout });
     return result;
 }
 
@@ -1931,7 +1960,7 @@ async function main() {
                             if (result.success) {
                                 console.log(`  等待 ${delayMs / 1000} 秒间隔...`);
                                 await new Promise(r => setTimeout(r, delayMs));
-                                const idResult = await getFirstTweetIdFromPage(tabId, safeExecuteScript);
+                                const idResult = await getFirstTweetIdFromPage(tabId, safeExecuteScript, text);
                                 if (idResult?.success && idResult.tweetId) {
                                     lastId = idResult.tweetId;
                                     postedIds.push(lastId);
