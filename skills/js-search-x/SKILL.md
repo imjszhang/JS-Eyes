@@ -1,7 +1,7 @@
 ---
 name: js-search-x
-description: X.com (Twitter) content scraping skill — search tweets, get user timelines, fetch post details and home feed via browser automation.
-version: 1.0.0
+description: X.com (Twitter) content scraping and posting skill — search tweets, get user timelines, fetch post details, home feed, and publish replies/quotes/threads via browser automation.
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "\U0001F50D"
@@ -15,7 +15,7 @@ metadata:
 
 # js-search-x
 
-X.com (Twitter) 内容抓取技能 — 基于 js-eyes 浏览器自动化，通过 GraphQL API 拦截 + DOM 回退双策略获取推文数据。
+X.com (Twitter) 内容抓取与发帖技能 — 基于 js-eyes 浏览器自动化，通过 GraphQL API 拦截 + DOM 回退双策略获取推文数据，并支持回复/新帖/Quote Tweet/串帖等发帖操作。
 
 ## 依赖
 
@@ -31,7 +31,7 @@ X.com (Twitter) 内容抓取技能 — 基于 js-eyes 浏览器自动化，通�
 |------|------|
 | `x_search_tweets` | 搜索 X.com 推文，支持关键词、排序、日期范围、互动数过滤等 |
 | `x_get_profile` | 获取指定用户的时间线推文，支持翻页、日期筛选 |
-| `x_get_post` | 获取推文详情（含对话线程、回复、引用推文、链接卡片、视频多质量），支持批量 |
+| `x_get_post` | 获取推文详情（含对话线程、回复、引用推文、链接卡片、视频多质量），支持批量；也可发回复/新帖/QT/串帖 |
 | `x_get_home_feed` | 获取首页推荐流（For You / Following） |
 
 ## 编程 API
@@ -131,20 +131,40 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 
 ## 工作原理
 
+### 数据抓取
+
 1. 通过 js-eyes 在已登录 X.com 的浏览器标签页中注入脚本
-2. 动态扫描 JS bundle 发现 GraphQL queryId 和 features（带本地缓存）
-3. 使用 `fetch()` 调用 X.com GraphQL API（SearchTimeline / UserTweets / TweetDetail / HomeTimeline）
+2. 动态扫描 JS bundle 发现 GraphQL queryId 和 features（带 24h 本地缓存）
+3. 使用 `fetch()` 调用 X.com GraphQL API（UserTweets / TweetDetail / HomeTimeline 等）
 4. 解析 API 响应提取推文数据
 5. GraphQL 失败时自动回退到 DOM 提取
-6. 支持自动重试、queryId 过期重新发现、429 速率限制保护
+6. 支持自动重试、queryId 过期重新发现、429 速率限制保护（连续 3 次 429 后暂停 5 分钟）
 
-**发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。`--reply-style` 可选 `reply`（默认，标准 Replying to @xxx 式）或 `thread`（直接在推文下方点击回复按钮）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+> **注意**：搜索功能当前仅使用 DOM（GraphQL SearchTimeline 已实现但 `ENABLE_GRAPHQL_SEARCH=false`）。DOM fallback 输出会缺少 `inReplyToTweetId`、`conversationId`、`lang` 等 GraphQL 特有字段。
 
-**发新帖与串推**：`post` 命令支持 `--post "内容"` 发一条新帖，或 `--thread "段1" "段2" ...` 发 X 特色串推（第 2 条起依次回复上一条）。同样优先 GraphQL CreateTweet，失败时单条新帖可回退到首页 DOM 发推。串推支持 `--thread-delay`（段间延迟毫秒，默认 3500）、`--thread-max`（最大条数，默认 25）。均为写操作，请注意限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+### GraphQL API 端点
 
-**Quote Tweet（引用帖）**：`--post "评论" --quote <url_or_id>` 引用指定推文并附上评论。优先通过 GraphQL CreateTweet + `attachment_url` 发送，失败时回退到 DOM 自动化（打开推文页 → 点击 Repost → 选 Quote → 输入评论 → 点击 Post）。与 `--reply`、`--thread` 互斥；可使用 `--dry-run` 仅打印不发送。
+| API | 用途 | 状态 |
+|-----|------|------|
+| SearchTimeline | 搜索 | 已实现但未启用，仅用 DOM |
+| UserByScreenName | 获取用户信息 | 活跃 |
+| UserTweets / UserTweetsAndReplies | 用户时间线 | 活跃，DOM fallback |
+| TweetDetail | 推文详情、对话、回复 | 活跃，DOM fallback |
+| TweetResultByRestId | 单条推文（备用） | 备用 |
+| HomeTimeline / HomeLatestTimeline | For You / Following 流 | 活跃，DOM fallback |
+| CreateTweet | 发帖 | 仅 Quote Tweet 使用（含 `attachment_url`） |
 
-**附带图片**：`--image <path>` 可在发新帖或串推第 1 条时附带一张图片。图片通过浏览器端的媒体上传流程处理。
+### 发帖操作
+
+| 操作 | 实现方式 | 说明 |
+|------|----------|------|
+| `--reply` | Intent URL（`reply` 风格）或 DOM（`thread` 风格） | **不使用 GraphQL**，`--reply-style` 切换 |
+| `--post` | DOM composer | **不使用 GraphQL** |
+| `--post --quote` | GraphQL CreateTweet + `attachment_url`，DOM fallback | **唯一使用 GraphQL 发帖的模式** |
+| `--thread` | DOM（第一条新帖，后续逐条在上一条页面回复） | **不使用 GraphQL** |
+| `--image` | 浏览器端媒体上传流程 | 可在发新帖或串推第 1 条时附带图片 |
+
+所有发帖操作成功后输出 `__RESULT_JSON__:{"success":true,"replyTweetId":"..."}` 或 `quoteTweetId`。均为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
 
 ## 目录结构
 
@@ -158,9 +178,9 @@ skills/js-search-x/
 │   ├── package.json
 │   └── index.mjs             # 注册 4 个 AI 工具
 ├── lib/
-│   ├── api.js                # 编程 API（核心）
-│   ├── xUtils.js             # 共享工具函数
-│   └── js-eyes-client.js     # JS-Eyes SDK 客户端
+│   ├── api.js                # 编程 API（searchTweets/getProfileTweets/getPost/getHomeFeed）
+│   ├── js-eyes-client.js     # 浏览器控制（连接 js-eyes WebSocket 服务器）
+│   └── xUtils.js             # 共享工具（GraphQL 参数发现/缓存、tab 注册表、tweet 解析器）
 └── scripts/
     ├── x-search.js           # 搜索脚本
     ├── x-profile.js          # 用户时间线脚本

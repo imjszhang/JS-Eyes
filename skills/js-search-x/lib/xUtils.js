@@ -590,7 +590,8 @@ function buildGraphQLTweetParserSnippet() {
             mediaUrls: [...new Set(mediaUrls)],
             tweetUrl: screenName && tweetId ? ('https://x.com/' + screenName + '/status/' + tweetId) : '',
             isRetweet: !!legacy.retweeted_status_result,
-            isReply: !!legacy.in_reply_to_status_id_str
+            isReply: !!legacy.in_reply_to_status_id_str,
+            inReplyToTweetId: legacy.in_reply_to_status_id_str || null
         };
     };`;
 }

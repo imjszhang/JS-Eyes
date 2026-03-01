@@ -1,15 +1,16 @@
-# JS-Eyes Example: X.com 内容抓取
+# JS-Eyes Example: X.com 内容抓取与发帖
 
-基于 JS-Eyes SDK 的 X.com (Twitter) 内容抓取工具，展示如何利用 JS-Eyes 的浏览器自动化能力构建实际应用。
+基于 JS-Eyes SDK 的 X.com (Twitter) 内容抓取与发帖工具，展示如何利用 JS-Eyes 的浏览器自动化能力构建实际应用。
 
 ## 功能
 
-| 命令 | 说明 |
-|------|------|
-| `search <keyword>` | 按关键词搜索推文，支持高级筛选 |
-| `profile <username>` | 抓取指定用户的推文时间线 |
-| `post <url_or_id>` | 抓取推文详情，支持对话线程和回复；也可发回复、新帖、串推 |
-| `home` | 抓取首页推荐流（For You / Following） |
+| 命令 | 说明 | 数据来源/方式 |
+|------|------|---------|
+| `search <keyword>` | 按关键词搜索推文，支持高级筛选 | DOM 提取（GraphQL 已实现但未启用） |
+| `profile <username>` | 抓取指定用户的推文时间线 | UserTweets GraphQL API，DOM fallback |
+| `post <url_or_id>` | 抓取推文详情，支持对话线程和回复 | TweetDetail GraphQL API，DOM fallback |
+| `post --reply/--post/--quote/--thread` | 发回复、新帖、Quote Tweet、串帖 | 见下方说明 |
+| `home` | 抓取首页推荐流（For You / Following） | HomeTimeline GraphQL API，DOM fallback |
 
 ## 前提条件
 
@@ -54,12 +55,24 @@ node index.js home --feed following --max-pages 5
 
 ## 工作原理
 
-本示例通过 JS-Eyes SDK（`clients/js-eyes-client.js`）与浏览器交互：
+本工具通过 JS-Eyes SDK（`lib/js-eyes-client.js`）与浏览器交互：
 
-1. **Tab 复用**：智能复用已打开的 x.com 标签页，避免重复创建
-2. **GraphQL API 调用**：在浏览器上下文中注入脚本，利用已有登录会话调用 X.com 的 GraphQL API
+1. **Tab 复用**：文件锁 tab 注册表（`work_dir/cache/tab_registry.json`），同域名跨进程复用，30 分钟超时自动清理
+2. **GraphQL API**：动态扫描 JS bundle 发现 queryId（带 24h 缓存），在浏览器上下文中调用 X.com GraphQL API
 3. **DOM 提取兜底**：当 GraphQL API 不可用时，回退到 DOM 解析方式
-4. **断点续传**：支持中断后恢复，边抓边保存
+4. **断点续传**：search/profile/home 支持 `--resume`，边抓边保存
+5. **Rate Limit 保护**：429 自动退避，连续 3 次后暂停 5 分钟；queryId 400/404 自动重新发现
+
+### 发帖实现方式
+
+| 操作 | 实际实现 |
+|------|----------|
+| `--reply` | Intent URL（`reply` 风格）或推文详情页 DOM（`thread` 风格），**不使用 GraphQL** |
+| `--post` | 首页 DOM composer，**不使用 GraphQL** |
+| `--post --quote` | **GraphQL CreateTweet** + `attachment_url`，失败则 DOM fallback（唯一使用 GraphQL 的发帖模式） |
+| `--thread` | 第一条 DOM 新帖 + 后续逐条在上一条页面 DOM 回复，**不使用 GraphQL** |
+
+发帖成功后输出 `__RESULT_JSON__:{"success":true,"replyTweetId":"..."}` 或 `quoteTweetId`。
 
 ### 使用的 JS-Eyes API
 
