@@ -152,15 +152,15 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 | TweetDetail | 推文详情、对话、回复 | 活跃，DOM fallback |
 | TweetResultByRestId | 单条推文（备用） | 备用 |
 | HomeTimeline / HomeLatestTimeline | For You / Following 流 | 活跃，DOM fallback |
-| CreateTweet | 发帖 | 仅 Quote Tweet 使用（含 `attachment_url`） |
+| CreateTweet | 发帖 | Reply（优先尝试）和 Quote Tweet 使用；Reply 失败时 fallback 到 Intent/DOM |
 
 ### 发帖操作
 
 | 操作 | 实现方式 | 说明 |
 |------|----------|------|
-| `--reply` | Intent URL（`reply` 风格）或 DOM（`thread` 风格） | **不使用 GraphQL**，`--reply-style` 切换 |
+| `--reply` | 优先 GraphQL CreateTweet，fallback 到 Intent URL（`reply` 风格）或 DOM（`thread` 风格） | GraphQL 可靠返回 reply ID；fallback 时从页面 URL/DOM 捕获 ID；`--reply-style` 切换 fallback 模式 |
 | `--post` | DOM composer | **不使用 GraphQL** |
-| `--post --quote` | GraphQL CreateTweet + `attachment_url`，DOM fallback | **唯一使用 GraphQL 发帖的模式** |
+| `--post --quote` | GraphQL CreateTweet + `attachment_url`，DOM fallback | GraphQL 返回 quote tweet ID |
 | `--thread` | DOM（第一条新帖，后续逐条在上一条页面回复） | **不使用 GraphQL** |
 | `--image` | 浏览器端媒体上传流程 | 可在发新帖或串推第 1 条时附带图片 |
 

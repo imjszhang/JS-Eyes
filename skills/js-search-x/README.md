@@ -67,12 +67,12 @@ node index.js home --feed following --max-pages 5
 
 | 操作 | 实际实现 |
 |------|----------|
-| `--reply` | Intent URL（`reply` 风格）或推文详情页 DOM（`thread` 风格），**不使用 GraphQL** |
+| `--reply` | 优先 **GraphQL CreateTweet**（可靠返回 reply ID），失败 fallback 到 Intent URL（`reply` 风格）或 DOM（`thread` 风格） |
 | `--post` | 首页 DOM composer，**不使用 GraphQL** |
-| `--post --quote` | **GraphQL CreateTweet** + `attachment_url`，失败则 DOM fallback（唯一使用 GraphQL 的发帖模式） |
+| `--post --quote` | **GraphQL CreateTweet** + `attachment_url`，失败则 DOM fallback |
 | `--thread` | 第一条 DOM 新帖 + 后续逐条在上一条页面 DOM 回复，**不使用 GraphQL** |
 
-发帖成功后输出 `__RESULT_JSON__:{"success":true,"replyTweetId":"..."}` 或 `quoteTweetId`。
+发帖成功后输出 `__RESULT_JSON__:{"success":true,"replyTweetId":"..."}` 或 `quoteTweetId`。Intent/DOM fallback 模式也会尝试从页面 URL 或 DOM 中捕获 reply ID。
 
 ### 使用的 JS-Eyes API
 
