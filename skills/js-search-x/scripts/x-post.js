@@ -2204,10 +2204,15 @@ async function main() {
                             ? await postReplyViaIntent(browser, tabId, options.reply, safeExecuteScript)
                             : await postReplyViaDom(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
                         if (replyResult.success) {
-                            console.log('回复已发送');
+                            console.log('回复已发送' + (replyResult.tweetId ? '，ID: ' + replyResult.tweetId : ''));
                         } else {
                             console.error('回复失败:', replyResult.error || '未知错误');
                         }
+                        console.log('__RESULT_JSON__:' + JSON.stringify({
+                            success: !!replyResult.success,
+                            replyTweetId: replyResult.tweetId || '',
+                            error: replyResult.error || '',
+                        }));
                     }
                 } finally {
                     await releaseXTab(browser, tabId, !options.closeTab);
