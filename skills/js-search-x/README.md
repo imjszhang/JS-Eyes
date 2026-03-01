@@ -42,9 +42,10 @@ node index.js post https://x.com/user/status/1234567890 --with-replies 50
 # 回复推文
 node index.js post https://x.com/user/status/1234567890 --reply "回复内容"
 
-# 发新帖 / 串推
+# 发新帖 / 串推 / 引用帖
 node index.js post --post "新帖内容"
 node index.js post --post "看看这张图" --image path/to/image.png
+node index.js post --post "评论" --quote https://x.com/user/status/1234567890
 node index.js post --thread "段1" "段2" "段3" --thread-delay 2000
 
 # 首页推荐

@@ -7,7 +7,7 @@
  * 返回结构化数据，不做 process.exit、不写文件。
  *
  * 用法:
- *   const { BrowserAutomation } = require('js-eyes-client');
+ *   const { BrowserAutomation } = require('./js-eyes-client');
  *   const { searchTweets, getProfileTweets, getPost, getHomeFeed } = require('./lib/api');
  *   const browser = new BrowserAutomation('ws://localhost:18080');
  *   const result = await searchTweets(browser, 'AI agent', { maxPages: 3 });

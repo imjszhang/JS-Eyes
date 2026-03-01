@@ -31,7 +31,7 @@ X.com (Twitter) 内容抓取技能 — 基于 js-eyes 浏览器自动化，通�
 |------|------|
 | `x_search_tweets` | 搜索 X.com 推文，支持关键词、排序、日期范围、互动数过滤等 |
 | `x_get_profile` | 获取指定用户的时间线推文，支持翻页、日期筛选 |
-| `x_get_post` | 获取推文详情（含对话线程和回复），支持批量 |
+| `x_get_post` | 获取推文详情（含对话线程、回复、引用推文、链接卡片、视频多质量），支持批量 |
 | `x_get_home_feed` | 获取首页推荐流（For You / Following） |
 
 ## 编程 API
@@ -70,6 +70,25 @@ const feed = await getHomeFeed(browser, {
 
 所有 API 函数接收 `BrowserAutomation` 实例（由调用者创建），返回结构化 JSON 数据，不做文件 I/O 或 `process.exit`。
 
+### 推文详情返回字段（getPost / x_get_post）
+
+`getPost` 返回的推文对象包含以下增强字段：
+
+| 字段 | 说明 |
+|------|------|
+| `quoteTweet` | 引用推文（Quote Tweet）的完整信息（嵌套推文对象），无引用时为 `null` |
+| `card` | 链接预览卡片（`name`、`title`、`description`、`url`、`thumbnailUrl`、`domain`），无卡片时为 `null` |
+| `mediaDetails` | 增强版媒体详情数组：照片含尺寸，视频含多质量 mp4/m3u8 URL、时长、海报图 |
+| `stats.quotes` | 引用次数（与 replies、retweets、likes、views、bookmarks 并列） |
+| `lang` | 推文语言代码 |
+| `isVerified` | 作者是否蓝标认证 |
+| `conversationId` | 对话线程 ID |
+| `inReplyToTweetId` | 被回复的推文 ID（非回复时为 `null`） |
+| `inReplyToUser` | 被回复的用户名 |
+| `source` | 发推来源（如客户端标识） |
+
+> 注意：`searchTweets` / `getProfileTweets` / `getHomeFeed` 返回的推文结构较精简，不含 `quoteTweet`、`card`、`mediaDetails` 等详情字段。
+
 ## CLI 命令
 
 ```bash
@@ -97,11 +116,14 @@ node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "测
 node skills/js-search-x/index.js post --post "新帖内容"
 # 发帖时附带图片
 node skills/js-search-x/index.js post --post "看看这张图" --image path/to/image.png
+# Quote Tweet：引用帖并附评论（需与 --post 搭配，与 --reply/--thread 互斥）
+node skills/js-search-x/index.js post --post "评论内容" --quote https://x.com/user/status/123
+node skills/js-search-x/index.js post --post "评论" --quote 1234567890 --dry-run
 # 发串推（thread：多条首尾相连）
 node skills/js-search-x/index.js post --thread "段1" "段2" "段3" --thread-delay 2000
 # 串推最大条数限制（默认25）
 node skills/js-search-x/index.js post --thread "段1" "段2" --thread-max 10
-# 发帖/串推也可用 --dry-run 仅打印不发送
+# 发帖/串推/Quote Tweet 也可用 --dry-run 仅打印不发送
 
 # 首页推荐
 node skills/js-search-x/index.js home --feed foryou --max-pages 5
@@ -119,6 +141,8 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 **发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。`--reply-style` 可选 `reply`（默认，标准 Replying to @xxx 式）或 `thread`（直接在推文下方点击回复按钮）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
 
 **发新帖与串推**：`post` 命令支持 `--post "内容"` 发一条新帖，或 `--thread "段1" "段2" ...` 发 X 特色串推（第 2 条起依次回复上一条）。同样优先 GraphQL CreateTweet，失败时单条新帖可回退到首页 DOM 发推。串推支持 `--thread-delay`（段间延迟毫秒，默认 3500）、`--thread-max`（最大条数，默认 25）。均为写操作，请注意限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+
+**Quote Tweet（引用帖）**：`--post "评论" --quote <url_or_id>` 引用指定推文并附上评论。优先通过 GraphQL CreateTweet + `attachment_url` 发送，失败时回退到 DOM 自动化（打开推文页 → 点击 Repost → 选 Quote → 输入评论 → 点击 Post）。与 `--reply`、`--thread` 互斥；可使用 `--dry-run` 仅打印不发送。
 
 **附带图片**：`--image <path>` 可在发新帖或串推第 1 条时附带一张图片。图片通过浏览器端的媒体上传流程处理。
 

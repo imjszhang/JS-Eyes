@@ -46,6 +46,7 @@ function printUsage() {
     console.log('  node index.js profile elonmusk --max-pages 10 --pretty');
     console.log('  node index.js post https://x.com/user/status/123 --with-thread');
     console.log('  node index.js post --post "新帖内容"');
+    console.log('  node index.js post --post "评论" --quote https://x.com/user/status/123');
     console.log('  node index.js post --thread "段1" "段2" "段3" --thread-delay 2000');
     console.log('  node index.js home --feed following');
     console.log('\n注意事项:');

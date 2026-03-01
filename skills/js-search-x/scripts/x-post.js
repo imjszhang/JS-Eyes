@@ -16,8 +16,9 @@
  *   --close-tab                抓完后关闭 tab（默认保留供下次复用）
  *   --reply "内容"             对指定推文发表回复（仅支持单条推文）
  *   --reply-style reply|thread  reply=Replying to @xxx 式（默认）；thread=推文下点击回复
- *   --dry-run                  与 --reply 同用时仅打印回复内容，不实际发送
+ *   --dry-run                  与 --reply/--post/--thread/--quote 同用时仅打印内容，不实际发送
  *   --post "内容"              发一条新帖（无需 URL/ID）；与 --reply、--thread、URL 互斥
+ *   --quote <url_or_id>        Quote Tweet：引用指定推文并附评论；需与 --post 搭配
  *   --thread "段1" "段2" ...   发串推（第2条起依次回复上一条）；与 --post、--reply、URL 互斥
  *   --thread-delay <ms>        串推每条之间的延迟毫秒（默认 2000）
  *   --thread-max <n>           串推最大条数，超过报错（默认 25）
@@ -36,6 +37,7 @@
  *   node scripts/x-post.js https://x.com/user/status/123 --reply "回复内容"
  *   node scripts/x-post.js https://x.com/user/status/123 --reply "测试" --dry-run
  *   node scripts/x-post.js --post "新帖内容"
+ *   node scripts/x-post.js --post "评论内容" --quote https://x.com/user/status/123
  *   node scripts/x-post.js --thread "段1" "段2" "段3" --thread-delay 2000
  * 
  * 注意:
@@ -87,7 +89,8 @@ function parseArgs() {
         thread: [],            // 串推多段（--thread "段1" "段2" ...）
         threadDelay: 3500,     // 串推每条之间延迟毫秒（建议 3～5 秒，避免限流）
         threadMax: 25,         // 串推最大条数
-        image: null            // 发帖时附带的图片路径（--image path，仅单条或串推第1条）
+        image: null,           // 发帖时附带的图片路径（--image path，仅单条或串推第1条）
+        quote: null            // Quote Tweet 引用目标（URL 或 ID，--quote url，需与 --post 搭配）
     };
 
     let collectingThread = false;
@@ -153,6 +156,10 @@ function parseArgs() {
                     options.image = typeof nextArg === 'string' ? nextArg : '';
                     if (options.image) i++;
                     break;
+                case 'quote':
+                    options.quote = typeof nextArg === 'string' ? nextArg : '';
+                    if (options.quote) i++;
+                    break;
                 default:
                     console.warn(`未知选项: ${arg}`);
             }
@@ -202,8 +209,9 @@ function printUsage() {
     console.log('  --close-tab                抓完后关闭 tab（默认保留）');
     console.log('  --reply "内容"             对指定推文发表回复（回复模式，仅支持单条推文）');
     console.log('  --reply-style <reply|thread>  reply=Replying to @xxx 式（默认）；thread=推文下点击回复（可能呈 thread）');
-    console.log('  --dry-run                  与 --reply/--post/--thread 同用时仅打印内容，不实际发送');
+    console.log('  --dry-run                  与 --reply/--post/--thread/--quote 同用时仅打印内容，不实际发送');
     console.log('  --post "内容"             发一条新帖（与 URL、--reply、--thread 互斥）');
+    console.log('  --quote <url_or_id>       Quote Tweet：引用指定推文并附评论（需与 --post 搭配，与 --reply/--thread 互斥）');
     console.log('  --thread "段1" "段2" ...  发串推（与 URL、--post、--reply 互斥）');
     console.log('  --thread-delay <ms>       串推每条之间延迟毫秒（默认 3500，建议 3～5 秒防限流）');
     console.log('  --thread-max <n>          串推最大条数（默认 25）');
@@ -220,6 +228,8 @@ function printUsage() {
     console.log('  node scripts/x-post.js --post "新帖内容"');
     console.log('  node scripts/x-post.js --thread "段1" "段2" "段3" --thread-delay 2000');
     console.log('  node scripts/x-post.js --post "带图发帖" --image ./path/to/image.png');
+    console.log('  node scripts/x-post.js --post "评论内容" --quote https://x.com/user/status/123');
+    console.log('  node scripts/x-post.js --post "评论" --quote 1234567890 --dry-run');
 }
 
 // ============================================================================
@@ -1561,14 +1571,18 @@ async function postReplyViaMutation(browser, tabId, tweetId, replyText, safeExec
  * @param {string} tweetText - 推文正文
  * @param {string} queryId - CreateTweet queryId
  * @param {object} [features] - 可选 features
+ * @param {string} [attachmentUrl] - Quote Tweet 时传入被引用推文的 URL
  */
-function buildCreateNewTweetScript(tweetText, queryId, features) {
+function buildCreateNewTweetScript(tweetText, queryId, features, attachmentUrl) {
     const featuresToUse = features || DEFAULT_GRAPHQL_FEATURES;
     const featuresLiteral = JSON.stringify(featuresToUse);
     const variables = {
         tweet_text: tweetText || '',
         dark_request: false
     };
+    if (attachmentUrl) {
+        variables.attachment_url = attachmentUrl;
+    }
     const variablesStr = JSON.stringify(variables).replace(/\\/g, '\\\\').replace(/`/g, '\\`');
     return `
     (async () => {
@@ -1633,12 +1647,12 @@ function buildCreateNewTweetScript(tweetText, queryId, features) {
     `;
 }
 
-async function postNewTweetViaMutation(browser, tabId, tweetText, safeExecuteScript) {
+async function postNewTweetViaMutation(browser, tabId, tweetText, safeExecuteScript, attachmentUrl) {
     const disc = await safeExecuteScript(tabId, buildDiscoverCreateTweetQueryIdScript(), { timeout: 15000 });
     if (!disc?.success || !disc.createTweetQueryId) {
         return { success: false, error: '未发现 CreateTweet queryId' };
     }
-    const script = buildCreateNewTweetScript(tweetText, disc.createTweetQueryId, disc.features);
+    const script = buildCreateNewTweetScript(tweetText, disc.createTweetQueryId, disc.features, attachmentUrl);
     const result = await safeExecuteScript(tabId, script, { timeout: 20000 });
     return result || { success: false, error: '脚本未返回结果' };
 }
@@ -1874,6 +1888,149 @@ async function postNewTweetViaDom(browser, tabId, tweetText, safeExecuteScript) 
     return result || { success: false, error: '脚本未返回结果' };
 }
 
+// ============================================================================
+// Quote Tweet: DOM fallback — 推文页 Repost → Quote → 填文本 → Post
+// ============================================================================
+
+function buildQuoteTweetViaDomScript(quoteText) {
+    const safeQuoteText = JSON.stringify(quoteText || '');
+    return `
+    (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        const quoteText = ${safeQuoteText};
+        try {
+            var isVisible = function(el) {
+                if (!el || !el.getBoundingClientRect) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < window.innerHeight && r.bottom > 0;
+            };
+
+            // 1. 找到推文并点击 Repost 按钮
+            var retweetBtn = null;
+            for (var waitR = 0; waitR < 20; waitR++) {
+                retweetBtn = document.querySelector('[data-testid="retweet"]') || document.querySelector('[data-testid="unretweet"]');
+                if (retweetBtn && isVisible(retweetBtn)) break;
+                retweetBtn = null;
+                await delay(400);
+            }
+            if (!retweetBtn) {
+                return { success: false, error: '未找到 Repost 按钮' };
+            }
+            retweetBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(300);
+            retweetBtn.click();
+            await delay(1200);
+
+            // 2. 在弹出菜单中找到 "Quote" 选项并点击
+            var quoteMenuItem = null;
+            for (var waitQ = 0; waitQ < 15; waitQ++) {
+                var menuItems = document.querySelectorAll('[role="menuitem"], [data-testid="Dropdown"] a, [role="menu"] [role="menuitem"]');
+                for (var mi = 0; mi < menuItems.length; mi++) {
+                    var txt = (menuItems[mi].textContent || '').trim().toLowerCase();
+                    if (txt === 'quote' || txt === '引用' || txt.includes('quote')) {
+                        quoteMenuItem = menuItems[mi];
+                        break;
+                    }
+                }
+                if (quoteMenuItem) break;
+                await delay(400);
+            }
+            if (!quoteMenuItem) {
+                return { success: false, error: '未找到 Quote 菜单项' };
+            }
+            quoteMenuItem.click();
+            await delay(2000);
+
+            // 3. 在弹出的 compose dialog 中找到输入框
+            var composerRoot = document.querySelector('[role="dialog"]') || document.querySelector('[data-testid="tweetComposer"]') || document.body;
+            let textarea = null;
+            for (var round = 0; round < 30; round++) {
+                var candidates = composerRoot.querySelectorAll('[data-testid="tweetTextarea_0"], [role="textbox"][contenteditable="true"], [contenteditable="true"]');
+                for (var k = 0; k < candidates.length; k++) {
+                    if (isVisible(candidates[k])) {
+                        textarea = candidates[k];
+                        break;
+                    }
+                }
+                if (textarea) break;
+                await delay(400);
+            }
+            if (!textarea) {
+                return { success: false, error: '未找到 Quote 输入框（等待超时）' };
+            }
+
+            // 4. 逐字符输入评论文本
+            textarea.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(250);
+            textarea.click();
+            await delay(200);
+            textarea.focus();
+            await delay(200);
+            if (textarea.contentEditable === 'true') {
+                for (var ci = 0; ci < quoteText.length; ci++) {
+                    var ch = quoteText[ci];
+                    if (document.execCommand) {
+                        document.execCommand('insertText', false, ch);
+                    } else {
+                        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+                        textarea.textContent = (textarea.textContent || '') + ch;
+                    }
+                    await delay(25);
+                }
+                textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: quoteText }));
+            } else {
+                textarea.value = quoteText;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            await delay(1200);
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: quoteText }));
+            await delay(800);
+
+            // 5. 找到 Post 按钮并点击
+            var root = composerRoot && composerRoot !== document.body ? composerRoot : document;
+            let postBtn = null;
+            for (var waitRound = 0; waitRound < 25; waitRound++) {
+                postBtn = root.querySelector('[data-testid="tweetButton"]');
+                if (!postBtn) postBtn = root.querySelector('[data-testid="tweetButtonInline"]');
+                if (!postBtn) {
+                    postBtn = Array.from(root.querySelectorAll('button[role="button"]')).find(function(b) {
+                        if (!isVisible(b)) return false;
+                        var t = (b.textContent || '').trim();
+                        return (t === 'Post' || t === '发推');
+                    });
+                }
+                if (postBtn && !postBtn.hasAttribute('disabled') && !postBtn.disabled && postBtn.getAttribute('aria-disabled') !== 'true') {
+                    break;
+                }
+                postBtn = null;
+                await delay(400);
+            }
+            if (!postBtn) {
+                return { success: false, error: '未找到 Quote 发送按钮' };
+            }
+            if (postBtn.hasAttribute('disabled') || postBtn.disabled || postBtn.getAttribute('aria-disabled') === 'true') {
+                return { success: false, error: 'Quote 发送按钮不可用（等待超时）' };
+            }
+            postBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+            await delay(300);
+            postBtn.click();
+            await delay(3000);
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    })();
+    `;
+}
+
+async function postQuoteTweetViaDom(browser, tabId, quoteTweetId, quoteText, safeExecuteScript) {
+    await browser.openUrl('https://x.com/i/status/' + quoteTweetId, tabId);
+    await new Promise(r => setTimeout(r, 5000));
+    const script = buildQuoteTweetViaDomScript(quoteText);
+    const result = await safeExecuteScript(tabId, script, { timeout: 45000 });
+    return result || { success: false, error: '脚本未返回结果' };
+}
+
 /**
  * 从当前页面获取指定内容推文的 ID（用于首页时间线发帖后取「刚发的那条」的 ID）
  * 若传入 matchText，会多等并重试，避免发帖后界面未及时更新导致找不到
@@ -1936,6 +2093,13 @@ async function main() {
 
     const hasPost = options.post != null && String(options.post).trim() !== '';
     const hasThread = options.thread && options.thread.length > 0;
+    const hasQuote = options.quote != null && String(options.quote).trim() !== '';
+
+    if (hasQuote && !hasPost) {
+        console.error('错误: --quote 必须与 --post 搭配使用（--post 提供引用评论文本）');
+        printUsage();
+        process.exit(1);
+    }
 
     if (options.tweetInputs.length === 0 && !hasPost && !hasThread) {
         console.error('错误: 请提供至少一个推文 URL/ID 或 --post/--thread');
@@ -1958,6 +2122,11 @@ async function main() {
         printUsage();
         process.exit(1);
     }
+    if (hasQuote && (hasThread || options.reply != null && String(options.reply).trim() !== '')) {
+        console.error('错误: --quote 与 --reply、--thread 互斥');
+        printUsage();
+        process.exit(1);
+    }
 
     const isReplyMode = options.reply != null && String(options.reply).trim() !== '';
     if (isReplyMode && options.tweetInputs.length > 1) {
@@ -1975,6 +2144,15 @@ async function main() {
                 process.exit(1);
             }
             tweetIds.push(id);
+        }
+    }
+
+    let quoteTweetId = null;
+    if (hasQuote) {
+        quoteTweetId = extractTweetId(options.quote);
+        if (!quoteTweetId) {
+            console.error(`错误: 无法解析 --quote 的推文 ID: "${options.quote}"`);
+            process.exit(1);
         }
     }
 
@@ -2008,7 +2186,11 @@ async function main() {
     console.log('X.com 帖子内容抓取工具');
     console.log('='.repeat(60));
     if (isPostMode) {
-    if (hasPost) {
+    if (hasQuote) {
+        console.log('模式: Quote Tweet');
+        console.log(`引用: https://x.com/i/status/${quoteTweetId}`);
+        console.log(`内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.post).slice(0, 60)}${String(options.post).length > 60 ? '...' : ''}"`);
+    } else if (hasPost) {
         console.log('模式: 发新帖（单条）');
         console.log(`内容: ${options.dryRun ? '(dry-run 不发送) ' : ''}"${String(options.post).slice(0, 60)}${String(options.post).length > 60 ? '...' : ''}"`);
         if (options.image) console.log('附带图片: ' + options.image);
@@ -2054,7 +2236,11 @@ async function main() {
                 const safeExecuteScript = createSafeExecuteScript(browser);
 
                 if (options.dryRun) {
-                    if (hasPost) {
+                    if (hasQuote) {
+                        console.log('--dry-run: 将发送 Quote Tweet:');
+                        console.log('  引用: https://x.com/i/status/' + quoteTweetId);
+                        console.log('  内容: ' + String(options.post));
+                    } else if (hasPost) {
                         console.log('--dry-run: 将发送新帖，内容为:');
                         console.log('  ' + String(options.post));
                     } else {
@@ -2062,6 +2248,28 @@ async function main() {
                         options.thread.forEach((seg, i) => console.log('  ' + (i + 1) + '. ' + seg));
                     }
                     console.log('(未实际发送)');
+                } else if (hasQuote) {
+                    // Quote Tweet: GraphQL 优先 → DOM fallback
+                    const quoteUrl = 'https://x.com/i/status/' + quoteTweetId;
+                    console.log('[Quote Tweet] 引用: ' + quoteUrl);
+
+                    let qtResult = await postNewTweetViaMutation(browser, tabId, options.post, safeExecuteScript, quoteUrl);
+
+                    if (!qtResult?.success) {
+                        console.log('[Quote Tweet] GraphQL 失败 (' + (qtResult?.error || '未知') + ')，回退到 DOM...');
+                        qtResult = await postQuoteTweetViaDom(browser, tabId, quoteTweetId, options.post, safeExecuteScript);
+                    }
+
+                    if (qtResult.success) {
+                        console.log('Quote Tweet 已发送' + (qtResult.tweetId ? '，ID: ' + qtResult.tweetId : ''));
+                    } else {
+                        console.error('Quote Tweet 失败:', qtResult.error || '未知错误');
+                    }
+                    console.log('__RESULT_JSON__:' + JSON.stringify({
+                        success: !!qtResult.success,
+                        quoteTweetId: qtResult.tweetId || '',
+                        error: qtResult.error || '',
+                    }));
                 } else if (hasPost) {
                     if (options.image) {
                         const imagePath = path.isAbsolute(options.image) ? options.image : path.join(process.cwd(), options.image);
@@ -2254,7 +2462,9 @@ module.exports = {
     buildCreateNewTweetScript,
     postNewTweetViaMutation,
     buildNewTweetViaDomScript,
-    postNewTweetViaDom
+    postNewTweetViaDom,
+    buildQuoteTweetViaDomScript,
+    postQuoteTweetViaDom
 };
 
 if (require.main === module) {
