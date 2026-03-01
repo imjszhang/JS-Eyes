@@ -8,7 +8,7 @@
 |------|------|
 | `search <keyword>` | 按关键词搜索推文，支持高级筛选 |
 | `profile <username>` | 抓取指定用户的推文时间线 |
-| `post <url_or_id>` | 抓取推文详情，支持对话线程和回复 |
+| `post <url_or_id>` | 抓取推文详情，支持对话线程和回复；也可发回复、新帖、串推 |
 | `home` | 抓取首页推荐流（For You / Following） |
 
 ## 前提条件
@@ -37,6 +37,15 @@ node index.js profile elonmusk --max-pages 10
 
 # 推文详情
 node index.js post https://x.com/user/status/1234567890 --with-thread
+node index.js post https://x.com/user/status/1234567890 --with-replies 50
+
+# 回复推文
+node index.js post https://x.com/user/status/1234567890 --reply "回复内容"
+
+# 发新帖 / 串推
+node index.js post --post "新帖内容"
+node index.js post --post "看看这张图" --image path/to/image.png
+node index.js post --thread "段1" "段2" "段3" --thread-delay 2000
 
 # 首页推荐
 node index.js home --feed following --max-pages 5
@@ -55,24 +64,24 @@ node index.js home --feed following --max-pages 5
 
 ```javascript
 const { BrowserAutomation } = require('./lib/js-eyes-client');
+const { searchTweets, getProfileTweets, getPost, getHomeFeed } = require('./lib/api');
 
 const browser = new BrowserAutomation('ws://localhost:18080');
-await browser.connect();
 
-// 获取标签页列表
+// 编程 API — 推荐用法
+const result = await searchTweets(browser, 'AI agent', { maxPages: 3 });
+const profile = await getProfileTweets(browser, 'elonmusk', { maxPages: 10 });
+const post = await getPost(browser, 'https://x.com/user/status/123', { withThread: true });
+const feed = await getHomeFeed(browser, { feed: 'foryou', maxPages: 5 });
+
+// 底层 JS-Eyes SDK 能力
 const tabs = await browser.getTabs();
-
-// 打开/导航 URL
 const tabId = await browser.openUrl('https://x.com/home');
-
-// 在页面中执行 JavaScript（核心能力）
-const result = await browser.executeScript(tabId, `
+const data = await browser.executeScript(tabId, `
   // 此代码在浏览器上下文中执行，可访问页面 DOM 和 API
   const response = await fetch('/graphql/...', { headers: ... });
   return await response.json();
 `);
-
-// 关闭标签页
 await browser.closeTab(tabId);
 ```
 

@@ -37,7 +37,7 @@ X.com (Twitter) 内容抓取技能 — 基于 js-eyes 浏览器自动化，通�
 ## 编程 API
 
 ```javascript
-const { BrowserAutomation } = require('js-eyes-client');
+const { BrowserAutomation } = require('./lib/js-eyes-client');
 const { searchTweets, getProfileTweets, getPost, getHomeFeed } = require('./lib/api');
 
 const browser = new BrowserAutomation('ws://localhost:18080');
@@ -81,16 +81,26 @@ node skills/js-search-x/index.js profile elonmusk --max-pages 10
 
 # 推文详情
 node skills/js-search-x/index.js post https://x.com/user/status/123 --with-thread
+# 推文详情 + 回复（翻页加载指定数量的回复）
+node skills/js-search-x/index.js post https://x.com/user/status/123 --with-replies 50
+# 抓完后关闭 tab（默认保留供下次复用）
+node skills/js-search-x/index.js post https://x.com/user/status/123 --close-tab
 
 # 对指定推文发表回复（先抓取该帖再发送回复；仅支持单条推文）
 node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "回复内容"
+# 选择回复样式：reply（默认，Replying to @xxx 式）或 thread（点击推文下回复按钮）
+node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "回复内容" --reply-style thread
 # 仅打印回复内容不实际发送
 node skills/js-search-x/index.js post https://x.com/user/status/123 --reply "测试" --dry-run
 
 # 发一条新帖（无需 URL/ID）
 node skills/js-search-x/index.js post --post "新帖内容"
+# 发帖时附带图片
+node skills/js-search-x/index.js post --post "看看这张图" --image path/to/image.png
 # 发串推（thread：多条首尾相连）
 node skills/js-search-x/index.js post --thread "段1" "段2" "段3" --thread-delay 2000
+# 串推最大条数限制（默认25）
+node skills/js-search-x/index.js post --thread "段1" "段2" --thread-max 10
 # 发帖/串推也可用 --dry-run 仅打印不发送
 
 # 首页推荐
@@ -106,9 +116,11 @@ node skills/js-search-x/index.js home --feed foryou --max-pages 5
 5. GraphQL 失败时自动回退到 DOM 提取
 6. 支持自动重试、queryId 过期重新发现、429 速率限制保护
 
-**发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+**发表回复**：`post` 命令支持 `--reply "内容"` 对指定推文发表回复（优先尝试 GraphQL CreateTweet，失败时回退到 DOM 点击回复框）。`--reply-style` 可选 `reply`（默认，标准 Replying to @xxx 式）或 `thread`（直接在推文下方点击回复按钮）。此为写操作，请注意 X 限流与账号安全；可使用 `--dry-run` 仅打印不发送。
 
-**发新帖与串推**：`post` 命令支持 `--post "内容"` 发一条新帖，或 `--thread "段1" "段2" ...` 发 X 特色串推（第 2 条起依次回复上一条）。同样优先 GraphQL CreateTweet，失败时单条新帖可回退到首页 DOM 发推。串推支持 `--thread-delay`（段间延迟毫秒）、`--thread-max`（最大条数）。均为写操作，请注意限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+**发新帖与串推**：`post` 命令支持 `--post "内容"` 发一条新帖，或 `--thread "段1" "段2" ...` 发 X 特色串推（第 2 条起依次回复上一条）。同样优先 GraphQL CreateTweet，失败时单条新帖可回退到首页 DOM 发推。串推支持 `--thread-delay`（段间延迟毫秒，默认 3500）、`--thread-max`（最大条数，默认 25）。均为写操作，请注意限流与账号安全；可使用 `--dry-run` 仅打印不发送。
+
+**附带图片**：`--image <path>` 可在发新帖或串推第 1 条时附带一张图片。图片通过浏览器端的媒体上传流程处理。
 
 ## 目录结构
 
@@ -123,7 +135,8 @@ skills/js-search-x/
 │   └── index.mjs             # 注册 4 个 AI 工具
 ├── lib/
 │   ├── api.js                # 编程 API（核心）
-│   └── xUtils.js             # 共享工具函数
+│   ├── xUtils.js             # 共享工具函数
+│   └── js-eyes-client.js     # JS-Eyes SDK 客户端
 └── scripts/
     ├── x-search.js           # 搜索脚本
     ├── x-profile.js          # 用户时间线脚本
