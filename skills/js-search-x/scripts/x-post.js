@@ -90,7 +90,8 @@ function parseArgs() {
         threadDelay: 3500,     // 串推每条之间延迟毫秒（建议 3～5 秒，避免限流）
         threadMax: 25,         // 串推最大条数
         image: null,           // 发帖时附带的图片路径（--image path，仅单条或串推第1条）
-        quote: null            // Quote Tweet 引用目标（URL 或 ID，--quote url，需与 --post 搭配）
+        quote: null,           // Quote Tweet 引用目标（URL 或 ID，--quote url，需与 --post 搭配）
+        domOnly: false         // 强制 DOM 模式，跳过 GraphQL CreateTweet（--dom-only）
     };
 
     let collectingThread = false;
@@ -160,6 +161,9 @@ function parseArgs() {
                     options.quote = typeof nextArg === 'string' ? nextArg : '';
                     if (options.quote) i++;
                     break;
+                case 'domonly':
+                    options.domOnly = true;
+                    break;
                 default:
                     console.warn(`未知选项: ${arg}`);
             }
@@ -193,6 +197,43 @@ function extractTweetId(input) {
     // URL 格式
     const match = input.match(/status\/(\d+)/);
     return match ? match[1] : null;
+}
+
+/**
+ * Check if the current page is an X verification/challenge page.
+ * Returns { blocked: true, reason: string } if detected, otherwise { blocked: false }.
+ */
+async function checkForVerificationPage(browser, tabId, safeExecuteScript) {
+    try {
+        const urlResult = await browser.getTabUrl(tabId);
+        const currentUrl = (typeof urlResult === 'string' ? urlResult : urlResult?.url) || '';
+
+        const blockedPaths = ['/account/access', '/i/flow/consent_flow', '/i/flow/login',
+                              '/account/login_verification', '/account/begin_password_reset'];
+        for (const p of blockedPaths) {
+            if (currentUrl.includes(p)) {
+                return { blocked: true, reason: `VERIFICATION_REQUIRED (url: ${p})` };
+            }
+        }
+
+        const domCheck = await safeExecuteScript(tabId, `(() => {
+            const text = (document.body?.innerText || '').substring(0, 3000).toLowerCase();
+            const signals = ['verify your identity', 'unusual login activity', 'suspicious activity',
+                             'confirm your identity', 'complete a captcha', 'are you a robot',
+                             'verify it\\'s you', 'account has been locked'];
+            for (const s of signals) { if (text.includes(s)) return s; }
+            return '';
+        })()`);
+
+        const matchedSignal = domCheck?.result?.value || domCheck?.value || '';
+        if (matchedSignal) {
+            return { blocked: true, reason: `VERIFICATION_REQUIRED (dom: ${matchedSignal})` };
+        }
+
+        return { blocked: false };
+    } catch (e) {
+        return { blocked: false };
+    }
 }
 
 function printUsage() {
@@ -2442,6 +2483,14 @@ async function main() {
                 await new Promise(r => setTimeout(r, 3500));
                 const safeExecuteScript = createSafeExecuteScript(browser);
 
+                // Anti-bot verification page detection
+                const verifyCheck = await checkForVerificationPage(browser, tabId, safeExecuteScript);
+                if (verifyCheck.blocked) {
+                    console.error('[发帖] 检测到验证页: ' + verifyCheck.reason);
+                    console.log('__RESULT_JSON__:' + JSON.stringify({ success: false, error: verifyCheck.reason }));
+                    return;
+                }
+
                 if (options.dryRun) {
                     if (hasQuote) {
                         console.log('--dry-run: 将发送 Quote Tweet:');
@@ -2456,19 +2505,24 @@ async function main() {
                     }
                     console.log('(未实际发送)');
                 } else if (hasQuote) {
-                    // Quote Tweet: GraphQL 优先 → DOM fallback
-                    // attachment_url 需要标准格式 https://x.com/{user}/status/{id}，/i/status/ 可能被 API 忽略
+                    // Quote Tweet: --dom-only 时直接 DOM，否则 GraphQL 优先 → DOM fallback
                     const quoteUrl = options.quote && options.quote.startsWith('http') && !options.quote.includes('/i/status/')
                         ? options.quote
                         : 'https://x.com/i/status/' + quoteTweetId;
-                    console.log('[Quote Tweet] 引用: ' + quoteUrl);
+                    console.log('[Quote Tweet] 引用: ' + quoteUrl + (options.domOnly ? ' (DOM-only)' : ''));
 
                     let graphqlError = '';
-                    let qtResult = await postNewTweetViaMutation(browser, tabId, options.post, safeExecuteScript, quoteUrl);
+                    let qtResult = null;
+
+                    if (!options.domOnly) {
+                        qtResult = await postNewTweetViaMutation(browser, tabId, options.post, safeExecuteScript, quoteUrl);
+                        if (!qtResult?.success) {
+                            graphqlError = qtResult?.error || '未知';
+                            console.log('[Quote Tweet] GraphQL 失败 (' + graphqlError + ')，回退到 DOM...');
+                        }
+                    }
 
                     if (!qtResult?.success) {
-                        graphqlError = qtResult?.error || '未知';
-                        console.log('[Quote Tweet] GraphQL 失败 (' + graphqlError + ')，回退到 DOM...');
                         qtResult = await postQuoteTweetViaDom(browser, tabId, quoteTweetId, options.post, safeExecuteScript);
                     }
 
@@ -2623,11 +2677,27 @@ async function main() {
                         console.log('(未实际发送)');
                     } else {
                         const safeExecuteScript = createSafeExecuteScript(browser);
+
+                        // Anti-bot verification page detection
+                        const verifyCheck = await checkForVerificationPage(browser, tabId, safeExecuteScript);
+                        if (verifyCheck.blocked) {
+                            console.error('[回复] 检测到验证页: ' + verifyCheck.reason);
+                            console.log('__RESULT_JSON__:' + JSON.stringify({ success: false, replyTweetId: '', error: verifyCheck.reason, graphqlError: '' }));
+                            return;
+                        }
+
                         let graphqlError = '';
-                        let replyResult = await postReplyViaMutation(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                        let replyResult = null;
+
+                        if (!options.domOnly) {
+                            replyResult = await postReplyViaMutation(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
+                            if (!replyResult?.success) {
+                                graphqlError = replyResult?.error || '未知';
+                                console.log('[回复] GraphQL 失败 (' + graphqlError + ')，回退到 DOM...');
+                            }
+                        }
+
                         if (!replyResult?.success) {
-                            graphqlError = replyResult?.error || '未知';
-                            console.log('[回复] GraphQL 失败 (' + graphqlError + ')，回退到 DOM...');
                             replyResult = useIntent
                                 ? await postReplyViaIntent(browser, tabId, options.reply, safeExecuteScript)
                                 : await postReplyViaDom(browser, tabId, replyTweetId, options.reply, safeExecuteScript);
